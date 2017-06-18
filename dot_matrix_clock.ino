@@ -1,6 +1,9 @@
 #include <MD_MAX72xx.h>
 #include "TimerOne.h"
 #include "RTClib.h"
+#include <Wire.h>
+
+#define DS3231_I2C_ADDRESS 0x68
 
 // Define the number of devices we have in the chain and the hardware interface
 #define	MAX_DEVICES	4
@@ -31,8 +34,6 @@ RTC_DS3231 rtc;
  * the string to an array.  That means each part needs an integer, string,
  * and character array representation.
  * 
- * I could simply store the time as characters and increment this way, but
- * it's easier for me to do the work of setting the time thinking in integers.
  */
 int second_int = 0;
 String second_str;
@@ -347,32 +348,36 @@ void printTime()
   printHour();
 }
 
+byte decToBcd(byte val)
+{
+  return( (val/10*16) + (val%10) );
+}
+
 void writeNewTime()
 {
   writing_time = 1;
-  // setting just hour, and while we were reading the new hour we stopped
-  // updating seconds, so we got behind.
-  // read the new time first and get the correct minute and second, write that
-  // back out
+
   if (setting_hour && !setting_min)
   {
-    DateTime now = rtc.now();
-    second_int = now.second();
-    minute_int = now.minute();
+    // setting just hour
+    Wire.beginTransmission(DS3231_I2C_ADDRESS);
+    Wire.write(2);
+    Wire.write(decToBcd(hour_int));
+    Wire.endTransmission();
   }
   else
   {
-    second_int = 0;
+    // setting minute and second
+    Wire.beginTransmission(DS3231_I2C_ADDRESS);
+    Wire.write(0);
+    Wire.write(decToBcd(0));
+    Wire.write(decToBcd(minute_int));
+    Wire.endTransmission();
   }
   
-  DateTime new_time (0, 0, 0, hour_int, minute_int, second_int);
-  rtc.adjust(new_time);
   writing_time = 0;
   setting_hour = 0;
   setting_min = 0;
-  buildHour();
-  buildMinute();
-  printTime();
 }
 
 void updateTime()
@@ -384,11 +389,15 @@ void updateTime()
   }
   
   DateTime now = rtc.now();
+
+  // the logic that controls seconds displaying for 15 seconds
+  // this sets the initial value and resets everything after
+  // 15 seconds
   if (display_seconds)
   {
     if (start_seconds == 0)
     {
-     start_seconds = now.second();
+      start_seconds = now.second();
     }
     else
     {
@@ -400,6 +409,8 @@ void updateTime()
       }
     }
   }
+
+  // update the time
   if (!setting_min)
   {
     if (second_int != now.second())
@@ -434,6 +445,8 @@ void setup()
 {
   Serial.begin(9600);
 
+  Wire.begin();
+  
   // set up to handle interrupt from 1 Hz pin
   pinMode(rtcTimerIntPin, INPUT_PULLUP);
   rtc.begin();
@@ -465,9 +478,6 @@ void loop()
     if (display_seconds)
     {
       printSeconds();
-    //  display_seconds--;
-     // if (!display_seconds)
-     //   printTime();
     }
     update_flag = 0;
   }
@@ -475,7 +485,7 @@ void loop()
   seconds_disp_state = digitalRead(SECONDS_PIN);
   if (seconds_disp_state == HIGH)
   {
-    display_seconds = 14;
+    display_seconds = 1;
     printSeconds();
   }
   
