@@ -1,129 +1,7 @@
 #include <MD_MAX72xx.h>
-#include "TimerOne.h"
 #include "RTClib.h"
 #include <Wire.h>
-
-#define DS3231_I2C_ADDRESS 0x68
-
-// Define the number of devices we have in the chain and the hardware interface
-#define	MAX_DEVICES	4
-
-// dot matrix display
-#define	CLK_PIN		13  // or SCK
-#define	DATA_PIN	11  // or MOSI
-#define	CS_PIN		10  // or SS
-
-// buttons
-#define SECONDS_PIN 7
-#define TIME_SET_PIN 3
-#define HOUR_SET_PIN 5
-#define MIN_SET_PIN 6
-
-// RTC interrupt pin
-const byte rtcTimerIntPin = 2;
-
-// SPI hardware interface
-MD_MAX72XX mx = MD_MAX72XX(CS_PIN, MAX_DEVICES);
-
-RTC_DS3231 rtc;
-
-/*
- * Using mx.setChar() for ease to print one char at a time.  This means 
- * it gets a bit kludgey converting the integer time to a char array.
- * Will have to convert each part to a string first and then convert 
- * the string to an array.  That means each part needs an integer, string,
- * and character array representation.
- * 
- */
-int second_int = 0;
-String second_str;
-char second_char[3];
-
-int minute_int = -1;
-String minute_str;
-char minute_char[3];
-
-int hour_int = -1;
-String hour_str;
-char hour_char[3];
-
-int update_flag = 0;
-
-// for am, set period = 0
-// for pm, set period = 1
-int period = 0;
-
-// bitmap for "A" (AM) and "P" (PM) indicator
-uint8_t ampm[2][3] =
-{ 
-  // 'A'
-  { 
-    0b01111100, 
-    0b00010100, 
-    0b01111100
-  },
-  // 'P'
-  { 
-    0b01111100, 
-    0b00010100, 
-    0b00011100
-  }
-};
-
-// bitmap for "alarm on" indicator
-uint8_t bell[3] = 
-{ 
-  0b00000101, 
-  0b00000011, 
-  0b00000111
-};
-
-// bitmap for blank clock spots
-uint8_t blank[5] =
-{
-  0b00000000,
-  0b00000000,
-  0b00000000,
-  0b00000000,
-  0b00000000
-};
-
-// positions for each number in the clock output
-int hour_tens_pos = 28;
-int hour_ones_pos = 22;
-int min_tens_pos = 14;
-int min_ones_pos = 8;
-int sep_pos = 16;
-int period_pos = 2;
-
-// variables for displaying seconds
-int seconds_disp_state = 0;
-int display_seconds = 0;
-
-int time_set_state = 0;
-unsigned long debounce_delay = 50;    // the debounce time; increase if the output flickers
-unsigned long button_hold_time = 150;
-
-// hour-setting variables
-int hour_set_state = 0;
-int last_hour_set_state = LOW;
-unsigned long last_hour_debounce_time = 0;
-int setting_hour = 0;
-long hour_up_time;
-long hour_down_time;
-boolean ignore_hour_up = false;
-
-// minute-setting variables
-int min_set_state = 0;
-int last_min_set_state = LOW;
-unsigned long last_min_debounce_time = 0;
-int setting_min = 0;
-long min_up_time;
-long min_down_time;
-boolean ignore_min_up = false;
-
-int start_seconds = 0;
-int writing_time= 0;
+#include "dot_matrix_clock.h"
 
 void setTime()
 {
@@ -150,10 +28,10 @@ void setTime()
     {
       if (ignore_hour_up == false)
       {
-          setting_hour = 1;
-          incrHour();
-          buildHour();
-          printHour();
+        setting_hour = 1;
+        incrHour();
+        buildHour();
+        printHour();
       }
       else
       {
@@ -191,10 +69,10 @@ void setTime()
     {
       if (ignore_min_up == false)
       {
-          setting_min = 1;
-          incrMinute();
-          buildMinute();
-          printMinute();
+        setting_min = 1;
+        incrMinute();
+        buildMinute();
+        printMinute();
       }
       else
       {
@@ -326,15 +204,16 @@ void printHour()
 
     if (hour_str.length() > 1)
     {
-      // print '10:'
+      // print something like '10:'
       mx.setChar(hour_tens_pos, hour_char[0]);
       mx.setChar(hour_ones_pos, hour_char[1]);
     }
     else
     {
       // must explicitly blank out the tens place or '1' will be left
+      // each char is five dots wide
       mx.setBuffer(hour_tens_pos, 5, blank);
-      // print '9:'
+      // print something like '9:'
       mx.setChar(hour_ones_pos, hour_char[0]);
     }
 
@@ -348,9 +227,16 @@ void printTime()
   printHour();
 }
 
+// Convert normal decimal numbers to binary coded decimal
 byte decToBcd(byte val)
 {
   return( (val/10*16) + (val%10) );
+}
+
+// Convert binary coded decimal to normal decimal numbers
+byte bcdToDec(byte val)
+{
+  return( (val/16*10) + (val%16) );
 }
 
 void writeNewTime()
@@ -360,18 +246,28 @@ void writeNewTime()
   if (setting_hour && !setting_min)
   {
     // setting just hour
+    // code taken from RTClib adjust()
     Wire.beginTransmission(DS3231_I2C_ADDRESS);
+    // set to register 2 and write one byte
     Wire.write(2);
     Wire.write(decToBcd(hour_int));
     Wire.endTransmission();
   }
   else
   {
-    // setting minute and second
+    // setting hour, minute, and second
+    // code taken from RTClib adjust()
     Wire.beginTransmission(DS3231_I2C_ADDRESS);
+    // set to register 0 and write three bytes
     Wire.write(0);
     Wire.write(decToBcd(0));
     Wire.write(decToBcd(minute_int));
+    // The set time function will stay in a loop until the
+    // time set button is released.  So someone could set
+    // both hour and minutes while holding the button down.
+    // While it may be rare, it's safer to set the hour every
+    // time the minute is changed.
+    Wire.write(decToBcd(hour_int));
     Wire.endTransmission();
   }
   
@@ -388,7 +284,16 @@ void updateTime()
     return;
   }
   
-  DateTime now = rtc.now();
+  // get time
+  // code taken from RTClib now()
+  Wire.beginTransmission(DS3231_I2C_ADDRESS);
+  Wire.write(0);
+  Wire.endTransmission();
+  // read three bytes:  second, minute, hour
+  Wire.requestFrom(DS3231_I2C_ADDRESS, 3);
+  uint8_t new_second_int = bcdToDec(Wire.read() & 0x7F);
+  uint8_t new_minute_int = bcdToDec(Wire.read());
+  uint8_t new_hour_int = bcdToDec(Wire.read());
 
   // the logic that controls seconds displaying for 15 seconds
   // this sets the initial value and resets everything after
@@ -397,11 +302,12 @@ void updateTime()
   {
     if (start_seconds == 0)
     {
-      start_seconds = now.second();
+      //start_seconds = now.second();
+      start_seconds = new_second_int;
     }
     else
     {
-      if (now.second() == (((start_seconds) + 15) % 60))
+      if (new_second_int == (((start_seconds) + 15) % 60))
       {
         start_seconds = 0;
         display_seconds = 0;
@@ -413,23 +319,23 @@ void updateTime()
   // update the time
   if (!setting_min)
   {
-    if (second_int != now.second())
+    if (!time_initialized || second_int != new_second_int)
     {
-      second_int = now.second();
+      second_int = new_second_int;
       buildSecond();
     }
-    if (minute_int != now.minute())
+    if (!time_initialized || minute_int != new_minute_int)
     {
-      minute_int = now.minute();
+      minute_int = new_minute_int;
       buildMinute();
       printMinute();
     }
   }
   if (!setting_hour)
   {
-    if (hour_int != now.hour())
+    if (!time_initialized || hour_int != new_hour_int)
     {
-      hour_int = now.hour();
+      hour_int = new_hour_int;
       buildHour();
       printHour();
     }
@@ -467,6 +373,7 @@ void setup()
 
   // build the initial time and print it for a start
   updateTime();
+  time_initialized = 1;
   printTime();
 }
 
@@ -493,6 +400,8 @@ void loop()
   if (time_set_state == HIGH)
   {
     if (!display_seconds)
+      // don't allow setting time while seconds
+      // are showing
       setTime();
   }
 }
