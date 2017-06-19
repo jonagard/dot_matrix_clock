@@ -18,8 +18,9 @@ continually polling to see if the time has changed.  Ideally this saves
 battery but probably not in reality, since most of the power usage are
 the LEDs.  If I get a backup battery working, maybe I can make the clock
 brightness automatically dim to the lowest setting.  It also writes the
-time and then does not rewrite that minute or hour until a change
-occurs.
+time to the dot matrix display and then does not rewrite that minute or
+hour until a change occurs.  Again, big dreams of efficiency that are
+probably wasted.
 
 It does not support 24-hour time.
 
