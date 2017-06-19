@@ -22,7 +22,11 @@ time to the dot matrix display and then does not rewrite that minute or
 hour until a change occurs.  Again, big dreams of efficiency that are
 probably wasted.
 
-It does not support 24-hour time.
+It does not support 24-hour time.  It does not support date even though
+the RTC can handle that.  I don't want to add more buttons for either of
+these functions.  Plus no traditional bedside alarm clock I used growing
+up (the classic red-glow, 7-segment, fake-wood clocks) had these
+functions, so I'm not motivated.
 
 
 ### Goals
