@@ -1,0 +1,41 @@
+This is an arduino-based clock using a 7219 dot matrix display:
+
+https://www.amazon.com/Wangdd22-MAX7219-Arduino-Microcontroller-Display/dp/B01EJ1AFW8
+
+For now the plan is to be like a traditional bedside alarm clock.  It
+should support setting time, setting an alarm, displaying seconds, and
+changing brightness.  A stretch goal would be supporting a backup 9v
+battery power source to get a user through the night should the power go
+out.
+
+Clock is based on the DS3231 RTC:
+
+https://www.amazon.com/DS3231-AT24C32-Precision-Module-Arduino/dp/B01IXXACD0
+
+The clock stores the set time in the RTC and reads the time from it.  It
+uses an interrupt from the RTC to read every second, rather than
+continually polling to see if the time has changed.  Ideally this saves
+battery but probably not in reality, since most of the power usage are
+the LEDs.  If I get a backup battery working, maybe I can make the clock
+brightness automatically dim to the lowest setting.  It also writes the
+time and then does not rewrite that minute or hour until a change
+occurs.
+
+It does not support 24-hour time.
+
+
+### Goals
+
+- [x] Show time from an RTC
+- [x] Show seconds upon button push
+- [x] Set the time using time set, hour, and minute buttons
+- [ ] Blink separator
+- [ ] Set and alarm
+  - [ ] Two alarms? The RTC has two alarm registers, but requires more
+    buttons
+- [ ] Have alarm trigger a buzzer
+  - [ ] Volume control?
+- [ ] Support changing brightness
+- [ ] Backup power (RTC has time backup already, this is for the display
+  and alarm to still work)
+- [ ] Build an enclosure
