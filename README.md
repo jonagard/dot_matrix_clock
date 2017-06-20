@@ -34,8 +34,8 @@ functions, so I'm not motivated.
 - [x] Show time from an RTC
 - [x] Show seconds upon button push
 - [x] Set the time using time set, hour, and minute buttons
-- [ ] Blink separator
-- [ ] Set and alarm
+- [x] Blink separator
+- [ ] Set an alarm
   - [ ] Two alarms? The RTC has two alarm registers, but requires more
     buttons
 - [ ] Have alarm trigger a buzzer
@@ -43,4 +43,5 @@ functions, so I'm not motivated.
 - [ ] Support changing brightness
 - [ ] Backup power (RTC has time backup already, this is for the display
   and alarm to still work)
+- [ ] Show temperature?
 - [ ] Build an enclosure

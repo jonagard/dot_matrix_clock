@@ -10,10 +10,11 @@
 #define CS_PIN    10  // or SS
 
 // buttons
-#define SECONDS_PIN 7
 #define TIME_SET_PIN 3
+#define ALARM_SET_PIN 4
 #define HOUR_SET_PIN 5
 #define MIN_SET_PIN 6
+#define SECONDS_PIN 7
 
 // RTC interrupt pin
 const byte rtcTimerIntPin = 2;
@@ -26,7 +27,6 @@ MD_MAX72XX mx = MD_MAX72XX(CS_PIN, MAX_DEVICES);
 RTC_DS3231 rtc;
 // Address of the RTC
 #define DS3231_I2C_ADDRESS 0x68
-
 
 /*
  * Using mx.setChar() for ease to print one char at a time.  This means 
@@ -51,9 +51,18 @@ uint8_t hour_int = 0;
 String hour_str;
 char hour_char[3];
 
+uint8_t alarm_minute_int = 0;
+String alarm_minute_str;
+char alarm_minute_char[3];
+
+uint8_t alarm_hour_int = 0;
+String alarm_hour_str;
+char alarm_hour_char[3];
+
 // for am, set period = 0
 // for pm, set period = 1
 int period = 0;
+int alarm_period = 0;
 
 // bitmap for "A" (AM) and "P" (PM) indicator
 uint8_t ampm[2][3] =
@@ -102,7 +111,6 @@ int period_pos = 2;
 int seconds_disp_state = 0;
 int display_seconds = 0;
 
-int time_set_state = 0;
 unsigned long debounce_delay = 50;    // the debounce time; increase if the output flickers
 unsigned long button_hold_time = 150;
 
@@ -111,6 +119,7 @@ int hour_set_state = 0;
 int last_hour_set_state = LOW;
 unsigned long last_hour_debounce_time = 0;
 int setting_hour = 0;
+int setting_alarm_hour = 0;
 long hour_up_time;
 long hour_down_time;
 boolean ignore_hour_up = false;
@@ -120,12 +129,62 @@ int min_set_state = 0;
 int last_min_set_state = LOW;
 unsigned long last_min_debounce_time = 0;
 int setting_min = 0;
+int setting_alarm_min = 0;
 long min_up_time;
 long min_down_time;
 boolean ignore_min_up = false;
 
+int time_set_state = 0;
+int alarm_set_state = 0;
 int start_seconds = 0;
 int writing_time= 0;
 int time_initialized = 0;
 int update_flag = 0;
+unsigned long start_sep;
+
+/*
+ * increment a value (a, which is an hour or minute) and wrap
+ * if it is greater than the limit (b, which is 23 or 59)
+ * since there isn't something to do in both the if and else
+ * part of the statement, setup the logic so value is set to
+ * zero in the else (I can leave the if blank but not the else)
+ */
+#define INCR(a, b) ((++a <= b) ? :a = 0) 
+
+/*
+ * build the string version of the minute or second and put
+ * it in the char array
+ * 
+ * a - min or second char array
+ * b - min or second string
+ * c - min or second integer
+ *
+ * if it is 0-9, add the leading zero
+ */
+
+#define BLD_MIN_SEC_STR(a, b, c) \
+  ((c < 10) ? (b = '0' + String(c)) : (b = String(c))); \
+  b.toCharArray(a, 3); 
+
+/*
+ * build the string version for the hour and put it in the
+ * char array
+ *
+ * a - hour char array
+ * b - hour string
+ * c - hour integer
+ *
+ * If the hour is 0, we want to print 12.  Do so by making
+ * the adjustment var -12, so that (0 - (-12)) == 12.
+ * Otherwise if time is greater than 12 adjust the time
+ * by 12 since we aren't doing 24-hour time.
+ */
+#define BLD_HOUR_STR(a, b, c) \
+  int adjustment = 0; \
+  if (c == 0) \
+    adjustment = -12; \
+  else if (c > 12) \
+    adjustment = 12; \
+  b = String(c - adjustment); \
+  b.toCharArray(a, 3);
 
