@@ -35,7 +35,9 @@ void setTime()
         setting_hour = 1;
         INCR(hour_int, 23);
         BLD_HOUR_STR(hour_char, hour_str, hour_int)
-        printHour();
+        PRINT_HOUR(hour_tens_pos, hour_char[0],
+                   hour_ones_pos, hour_char[1],
+                   hour_int, period);
       }
       else
       {
@@ -51,7 +53,9 @@ void setTime()
       setting_hour = 1;
       INCR(hour_int, 23);
       BLD_HOUR_STR(hour_char, hour_str, hour_int)
-      printHour();
+      PRINT_HOUR(hour_tens_pos, hour_char[0],
+                 hour_ones_pos, hour_char[1],
+                 hour_int, period);
       ignore_hour_up = true;
       hour_down_time = millis();
     }
@@ -76,7 +80,7 @@ void setTime()
         setting_min = 1;
         INCR(minute_int, 59);
         BLD_MIN_SEC_STR(minute_char, minute_str, minute_int);
-        printMinute();
+        PRINT_MIN(min_tens_pos, minute_char[0], min_ones_pos, minute_char[1]);
       }
       else
       {
@@ -92,7 +96,7 @@ void setTime()
       setting_min = 1;
       INCR(minute_int, 59);
       BLD_MIN_SEC_STR(minute_char, minute_str, minute_int);
-      printMinute();
+      PRINT_MIN(min_tens_pos, minute_char[0], min_ones_pos, minute_char[1]);
       ignore_min_up = true;
       min_down_time = millis();
     }
@@ -113,8 +117,11 @@ void setAlarm()
     // turn the separator on, otherwise it's on or off depending on the state
     // when you hit the button
     mx.setColumn(sep_pos, 0x14);
-    printAlarmHour();
-    printAlarmMinute();
+    PRINT_HOUR(hour_tens_pos, alarm_hour_char[0],
+               hour_ones_pos, alarm_hour_char[1],
+               alarm_hour_int, alarm_period);
+    PRINT_MIN(min_tens_pos, alarm_minute_char[0],
+              min_ones_pos, alarm_minute_char[1]);
 
     /*
      * Read hour button
@@ -140,7 +147,9 @@ void setAlarm()
         setting_alarm_hour = 1;
         INCR(alarm_hour_int, 23);
         BLD_HOUR_STR(alarm_hour_char, alarm_hour_str, alarm_hour_int)
-        printAlarmHour();
+        PRINT_HOUR(hour_tens_pos, alarm_hour_char[0],
+                   hour_ones_pos, alarm_hour_char[1],
+                   alarm_hour_int, alarm_period);
       }
       else
       {
@@ -156,7 +165,9 @@ void setAlarm()
       setting_alarm_hour = 1;
       INCR(alarm_hour_int, 23);
       BLD_HOUR_STR(alarm_hour_char, alarm_hour_str, alarm_hour_int)
-      printAlarmHour();
+      PRINT_HOUR(hour_tens_pos, alarm_hour_char[0],
+                 hour_ones_pos, alarm_hour_char[1],
+                 alarm_hour_int, alarm_period);
       ignore_hour_up = true;
       hour_down_time = millis();
     }
@@ -181,7 +192,8 @@ void setAlarm()
         setting_alarm_min = 1;
         INCR(alarm_minute_int, 59);
         BLD_MIN_SEC_STR(alarm_minute_char, alarm_minute_str, alarm_minute_int);
-        printAlarmMinute();
+        PRINT_MIN(min_tens_pos, alarm_minute_char[0],
+                  min_ones_pos, alarm_minute_char[1]);
       }
       else
       {
@@ -197,7 +209,8 @@ void setAlarm()
       setting_alarm_min = 1;
       INCR(alarm_minute_int, 59);
       BLD_MIN_SEC_STR(alarm_minute_char, alarm_minute_str, alarm_minute_int);
-      printAlarmMinute();
+      PRINT_MIN(min_tens_pos, alarm_minute_char[0],
+                min_ones_pos, alarm_minute_char[1]);
       ignore_min_up = true;
       min_down_time = millis();
     }
@@ -209,115 +222,33 @@ void setAlarm()
 
   printTime();
 
-  //if (setting_hour || setting_min)
-  //  writeNewTime();
+  if (setting_alarm_hour || setting_alarm_min)
+    writeNewAlarm();
 }
 
+/*
+ * I made the printing of minutes and hours a macro.  I am not doing so
+ * with seconds.  For some reason when I printed this way the seconds
+ * never printed.  The minutes stayed up.  I didn't feel like debugging.
+ * My main goal was using the same handling to print minutes/hours for
+ * alarm and time anyway.  Seconds are only called in one context.
+ */
 void printSeconds()
 {
+  CLEAR_DISP();
   mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
-  mx.setBuffer(period_pos, 3, blank);
-  mx.setBuffer(hour_tens_pos, 5, blank);
-  mx.setBuffer(hour_ones_pos, 5, blank);
   mx.setChar(min_tens_pos, second_char[0]);
   mx.setChar(min_ones_pos, second_char[1]);
   mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
 }
 
-void printMinute()
-{
-  if (!display_seconds)
-  {
-    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
-    mx.setChar(min_tens_pos, minute_char[0]);
-    mx.setChar(min_ones_pos, minute_char[1]);
-   //alarm bell
-   //mx.setBuffer(31, 3, bell);
-    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
-  }
-}
-
-void printHour()
-{
-  if (!display_seconds)
-  {
-    // set am/pm
-    period = 0;
-    if (hour_int > 11)
-      period = 1;
-
-    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
-
-    // print PM or AM indicator
-    mx.setBuffer(period_pos, 3, ampm[period]);
-
-    if (hour_str.length() > 1)
-    {
-      // print something like '10:'
-      mx.setChar(hour_tens_pos, hour_char[0]);
-      mx.setChar(hour_ones_pos, hour_char[1]);
-    }
-    else
-    {
-      // must explicitly blank out the tens place or '1' will be left
-      // each char is five dots wide
-      mx.setBuffer(hour_tens_pos, 5, blank);
-      // print something like '9:'
-      mx.setChar(hour_ones_pos, hour_char[0]);
-    }
-
-    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
-  }
-}
-
 void printTime()
 {
-  printMinute();
-  printHour();
-}
-
-void printAlarmMinute()
-{
-  if (!display_seconds)
-  {
-    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
-    mx.setChar(min_tens_pos, alarm_minute_char[0]);
-    mx.setChar(min_ones_pos, alarm_minute_char[1]);
-    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
-  }
-}
-
-void printAlarmHour()
-{
-  if (!display_seconds)
-  {
-    // set am/pm
-    alarm_period = 0;
-    if (alarm_hour_int > 11)
-      alarm_period = 1;
-
-    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
-
-    // print PM or AM indicator
-    mx.setBuffer(period_pos, 3, ampm[alarm_period]);
-
-    if (alarm_hour_str.length() > 1)
-    {
-      // print something like '10:'
-      mx.setChar(hour_tens_pos, alarm_hour_char[0]);
-      mx.setChar(hour_ones_pos, alarm_hour_char[1]);
-    }
-    else
-    {
-      // must explicitly blank out the tens place or '1' will be left
-      // each char is five dots wide
-      mx.setBuffer(hour_tens_pos, 5, blank);
-      // print something like '9:'
-      mx.setChar(hour_ones_pos, alarm_hour_char[0]);
-    }
-
-    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
-  }
+  PRINT_MIN(min_tens_pos, minute_char[0],
+            min_ones_pos, minute_char[1]);
+  PRINT_HOUR(hour_tens_pos, hour_char[0],
+             hour_ones_pos, hour_char[1],
+             hour_int, period);
 }
 
 // Convert normal decimal numbers to binary coded decimal
@@ -367,6 +298,38 @@ void writeNewTime()
   writing_time = 0;
   setting_hour = 0;
   setting_min = 0;
+}
+
+void writeNewAlarm()
+{
+  // setting hour and minute each time by default
+  // code taken from RTClib adjust()
+  Wire.beginTransmission(DS3231_I2C_ADDRESS);
+  // set to register 8 and write two bytes
+  Wire.write(8);
+  Wire.write(decToBcd(alarm_minute_int));
+  Wire.write(decToBcd(alarm_hour_int));
+  Wire.endTransmission();
+
+  setting_alarm_hour = 0;
+  setting_alarm_min = 0;
+}
+
+void readAlarm()
+{
+  // get alarm minute and hour
+  // ignore seconds because alarm seconds will always be zero
+  // code taken from RTClib now()
+  Wire.beginTransmission(DS3231_I2C_ADDRESS);
+  // alarm 1 minutes register
+  Wire.write(8);
+  Wire.endTransmission();
+  // read two bytes:  minute, hour
+  Wire.requestFrom(DS3231_I2C_ADDRESS, 2);
+  alarm_minute_int = bcdToDec(Wire.read());
+  alarm_hour_int = bcdToDec(Wire.read());
+  BLD_HOUR_STR(alarm_hour_char, alarm_hour_str, alarm_hour_int)
+  BLD_MIN_SEC_STR(alarm_minute_char, alarm_minute_str, alarm_minute_int);
 }
 
 void updateTime()
@@ -423,7 +386,7 @@ void updateTime()
     {
       minute_int = new_minute_int;
       BLD_MIN_SEC_STR(minute_char, minute_str, minute_int);
-      printMinute();
+      PRINT_MIN(min_tens_pos, minute_char[0], min_ones_pos, minute_char[1]);
     }
   }
   if (!setting_hour)
@@ -431,13 +394,16 @@ void updateTime()
     if (!time_initialized || hour_int != new_hour_int)
     {
       hour_int = new_hour_int;
-      //buildHour();
       BLD_HOUR_STR(hour_char, hour_str, hour_int)
-      printHour();
+      PRINT_HOUR(hour_tens_pos, hour_char[0],
+                 hour_ones_pos, hour_char[1], hour_int, period);
     }
   }
 }
 
+// The function called at the 1Hz interrupt.  Can't do any
+// real work here.  Just set the update_flag and let the
+// loop do work based on its status.
 void setUpdateFlag()
 {
   update_flag = 1;
@@ -449,10 +415,10 @@ void setup()
 
   Wire.begin();
 
-  // set up to handle interrupt from 1 Hz pin
+  // set up to handle interrupt from 1Hz pin
   pinMode(rtcTimerIntPin, INPUT_PULLUP);
   rtc.begin();
-  // enable the 1 Hz output
+  // enable the 1Hz output
   rtc.writeSqwPinMode(DS3231_SquareWave1Hz);
   attachInterrupt(digitalPinToInterrupt(rtcTimerIntPin),
                   setUpdateFlag, FALLING);
@@ -471,6 +437,9 @@ void setup()
   updateTime();
   time_initialized = 1;
   printTime();
+
+  // Read the initial alarm value for display purposes
+  readAlarm();
 }
 
 void loop()
@@ -478,6 +447,8 @@ void loop()
   if (update_flag)
   {
     updateTime();
+    // save time the blinker came on, will use this to turn it
+    // off below
     start_sep = millis();
     if (display_seconds)
     {

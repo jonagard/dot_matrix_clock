@@ -29,12 +29,12 @@ RTC_DS3231 rtc;
 #define DS3231_I2C_ADDRESS 0x68
 
 /*
- * Using mx.setChar() for ease to print one char at a time.  This means 
+ * Using mx.setChar() for ease to print one char at a time.  This means
  * it gets a bit kludgey converting the integer time to a char array.
- * Will have to convert each part to a string first and then convert 
+ * Will have to convert each part to a string first and then convert
  * the string to an array.  That means each part needs an integer, string,
  * and character array representation.
- * 
+ *
  * I could use one function pretty easily to convert second and minute
  * and get rid of a couple of these. But then I'd have to pass variables
  * around.  I like how easy these are to call this way.
@@ -66,26 +66,26 @@ int alarm_period = 0;
 
 // bitmap for "A" (AM) and "P" (PM) indicator
 uint8_t ampm[2][3] =
-{ 
+{
   // 'A'
-  { 
-    0b01111100, 
-    0b00010100, 
+  {
+    0b01111100,
+    0b00010100,
     0b01111100
   },
   // 'P'
-  { 
-    0b01111100, 
-    0b00010100, 
+  {
+    0b01111100,
+    0b00010100,
     0b00011100
   }
 };
 
 // bitmap for "alarm on" indicator
-uint8_t bell[3] = 
-{ 
-  0b00000101, 
-  0b00000011, 
+uint8_t bell[3] =
+{
+  0b00000101,
+  0b00000011,
   0b00000111
 };
 
@@ -149,22 +149,21 @@ unsigned long start_sep;
  * part of the statement, setup the logic so value is set to
  * zero in the else (I can leave the if blank but not the else)
  */
-#define INCR(a, b) ((++a <= b) ? :a = 0) 
+#define INCR(a, b) ((++a <= b) ? :a = 0)
 
 /*
  * build the string version of the minute or second and put
  * it in the char array
- * 
+ *
  * a - min or second char array
  * b - min or second string
  * c - min or second integer
  *
  * if it is 0-9, add the leading zero
  */
-
 #define BLD_MIN_SEC_STR(a, b, c) \
   ((c < 10) ? (b = '0' + String(c)) : (b = String(c))); \
-  b.toCharArray(a, 3); 
+  b.toCharArray(a, 3);
 
 /*
  * build the string version for the hour and put it in the
@@ -178,6 +177,15 @@ unsigned long start_sep;
  * the adjustment var -12, so that (0 - (-12)) == 12.
  * Otherwise if time is greater than 12 adjust the time
  * by 12 since we aren't doing 24-hour time.
+ *
+ * Do some work here to deal with a single-length hour (1-9)
+ * rather than dealing with it in the printing.  Single-length looks
+ * like:
+ * ['1']['\0']
+ * So shift things over and put a literal 0 in the zero position:
+ * [0]['1']['\0]
+ * That literal 0 won't print out five columns, so I still have to
+ * call CLEAR_DISP().  Mostly just keeping something in it in case.
  */
 #define BLD_HOUR_STR(a, b, c) \
   int adjustment = 0; \
@@ -186,5 +194,71 @@ unsigned long start_sep;
   else if (c > 12) \
     adjustment = 12; \
   b = String(c - adjustment); \
-  b.toCharArray(a, 3);
+  b.toCharArray(a, 3); \
+  if (b.length() == 1) \
+  { \
+    a[2] = '\0'; \
+    a[1] = a[0]; \
+    a[0] = 0; \
+  }
+
+/*
+ * print a minute value to the display
+ *
+ * a - tens position to print to
+ * b - tens value
+ * c - ones position to print to
+ * d - ones value
+ */
+#define PRINT_MIN(a, b, c, d) \
+  if (!display_seconds) \
+  { \
+    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF); \
+    mx.setChar(a, b); \
+    mx.setChar(c, d); \
+    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON); \
+  }
+
+/*
+ * print an hour value to the display, and the period
+ *
+ * a - tens position to print to
+ * b - tens value
+ * c - ones position to print to
+ * d - ones value
+ * e - hour int value
+ * f - period we work on
+ *
+ * Clear the display first as the second part of dealing with single-length
+ * hours.
+ *
+ * Also print the period here, will work for an alarm or time.
+ */
+#define PRINT_HOUR(a, b, c, d, e, f) \
+  if (!display_seconds) \
+  { \
+    CLEAR_DISP(); \
+    f = 0; \
+    if (e > 11) \
+      f = 1; \
+    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF); \
+    mx.setBuffer(period_pos, 3, ampm[f]); \
+    mx.setChar(a, b); \
+    mx.setChar(c, d); \
+    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON); \
+  }
+
+/*
+ * Macro to clear positions on the display.  For hours I just need to
+ * clear the tens position.  But when printing seconds I need to clear
+ * the period and the ones hour position.  So try using this
+ * one-size-fits-all approach as I doubt there will be any negative
+ * fallout.
+ */
+#define CLEAR_DISP() \
+  mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF); \
+  mx.setBuffer(period_pos, 3, blank); \
+  mx.setBuffer(hour_tens_pos, 5, blank); \
+  mx.setBuffer(hour_ones_pos, 5, blank); \
+  mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
 
