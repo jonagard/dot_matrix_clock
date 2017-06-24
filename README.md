@@ -35,9 +35,9 @@ functions, so I'm not motivated.
 - [x] Show seconds upon button push
 - [x] Set the time using time set, hour, and minute buttons
 - [x] Blink separator
-- [ ] Set an alarm
+- [x] Set an alarm
   - [ ] Two alarms? The RTC has two alarm registers, but requires more
-    buttons
+    buttons (I might end up using alarm two for snooze functionality)
 - [ ] Have alarm trigger a buzzer
   - [ ] Volume control?
 - [ ] Support changing brightness

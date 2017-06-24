@@ -315,7 +315,7 @@ void writeNewAlarm()
   setting_alarm_min = 0;
 }
 
-void readAlarm()
+void initializeAlarm()
 {
   // get alarm minute and hour
   // ignore seconds because alarm seconds will always be zero
@@ -330,6 +330,35 @@ void readAlarm()
   alarm_hour_int = bcdToDec(Wire.read());
   BLD_HOUR_STR(alarm_hour_char, alarm_hour_str, alarm_hour_int)
   BLD_MIN_SEC_STR(alarm_minute_char, alarm_minute_str, alarm_minute_int);
+
+  // Set the A1M4 bit to 1 so that the alarm matches on hour/minute/second
+  // Otherwise it would match on date as well, and I'm not setting dates
+  Wire.beginTransmission(DS3231_I2C_ADDRESS);
+  // set to register a and write one byte
+  Wire.write(0xa);
+  Wire.write(decToBcd(0x80));
+  Wire.endTransmission();
+}
+
+void checkAlarm()
+{
+  // get A1F status
+  // code taken from RTClib now()
+  Wire.beginTransmission(DS3231_I2C_ADDRESS);
+  Wire.write(0xf);
+  Wire.endTransmission();
+  // read three bytes:  second, minute, hour
+  Wire.requestFrom(DS3231_I2C_ADDRESS, 1);
+  uint8_t status = bcdToDec(Wire.read());
+  if (status & 0x01)
+  {
+    Serial.println("ALARM");
+    Wire.beginTransmission(DS3231_I2C_ADDRESS);
+    // set to register a and write one byte
+    Wire.write(0xf);
+    Wire.write(decToBcd(status ^ 0x01));
+    Wire.endTransmission();
+  }
 }
 
 void updateTime()
@@ -399,6 +428,7 @@ void updateTime()
                  hour_ones_pos, hour_char[1], hour_int, period);
     }
   }
+  checkAlarm();
 }
 
 // The function called at the 1Hz interrupt.  Can't do any
@@ -439,7 +469,7 @@ void setup()
   printTime();
 
   // Read the initial alarm value for display purposes
-  readAlarm();
+  initializeAlarm();
 }
 
 void loop()
