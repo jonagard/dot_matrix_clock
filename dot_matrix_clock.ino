@@ -3,6 +3,49 @@
 #include <Wire.h>
 #include "dot_matrix_clock.h"
 
+void handleAlarm()
+{
+  // Test for button release and store the up time
+  if ((millis() - alarm_btn_debounce_time) > long(debounce_delay))
+  {
+    if (alarm_btn_reading == HIGH)
+    {
+      if (!alarm_pwr_state)
+      {
+        // alarm was not turned on, turn it on
+        alarm_pwr_state = 1;
+        mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
+        // alarm bell
+        mx.setBuffer(31, 3, bell);
+        mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
+      }
+      else
+      {
+        // alarm was on, turn it off and stop any tone
+        // being generated
+        noTone(BUZZER_PIN);
+        alarm_pwr_state = 0;
+        mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
+        // alarm bell
+        mx.setBuffer(31, 3, blank);
+        mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
+      }
+
+      // We need to reset the alarm bit in either case.  If the alarm has been
+      // off, that just means we haven't paid attention to it.  The A1F bit could
+      // still be set from the last time it was triggered.  So every time the
+      // alarm is turned on, that bit should be reset.  Coincidentally, if a user
+      // turns the alarm on right at the moment it was about to go off, this
+      // would reset the alarm until 24 hours from now.  But a user shouldn't
+      // have a real use-case for this.
+      // In the case of turning the alarm off, that's a no brainer, we need to
+      // reset the bit.
+      resetAlarmStatus();
+      alarm_btn_debounce_time = millis();
+    }
+  }
+}
+
 void setTime()
 {
   while (time_set_state == HIGH)
@@ -340,24 +383,40 @@ void initializeAlarm()
   Wire.endTransmission();
 }
 
-void checkAlarm()
+void getAlarmStatus()
 {
   // get A1F status
   // code taken from RTClib now()
   Wire.beginTransmission(DS3231_I2C_ADDRESS);
   Wire.write(0xf);
   Wire.endTransmission();
-  // read three bytes:  second, minute, hour
+  // read one byte: status register that holds A1F bit
   Wire.requestFrom(DS3231_I2C_ADDRESS, 1);
-  uint8_t status = bcdToDec(Wire.read());
-  if (status & 0x01)
+  status_register = bcdToDec(Wire.read());
+}
+
+void resetAlarmStatus()
+{
+  getAlarmStatus();
+  Wire.beginTransmission(DS3231_I2C_ADDRESS);
+  // set to register a and write one byte
+  Wire.write(0xf);
+  Wire.write(decToBcd(status_register ^ 0x01));
+  Wire.endTransmission();
+}
+
+void checkAlarm()
+{
+  if (!alarm_pwr_state)
+    return;
+
+  getAlarmStatus();
+  if (status_register & 0x01)
   {
-    Serial.println("ALARM");
-    Wire.beginTransmission(DS3231_I2C_ADDRESS);
-    // set to register a and write one byte
-    Wire.write(0xf);
-    Wire.write(decToBcd(status ^ 0x01));
-    Wire.endTransmission();
+    tone(BUZZER_PIN, 1245, 300);
+    tone(BUZZER_PIN, 988, 300);
+    tone(BUZZER_PIN, 880, 300);
+    tone(BUZZER_PIN, 698, 300);
   }
 }
 
@@ -458,6 +517,9 @@ void setup()
   pinMode(ALARM_SET_PIN, INPUT);
   pinMode(HOUR_SET_PIN, INPUT);
   pinMode(MIN_SET_PIN, INPUT);
+  pinMode(ALARM_PWR_PIN, INPUT);
+  pinMode(SNOOZE_PIN, INPUT);
+  // explicitly not calling pinMode on passive buzzer
 
   // setup dot matrix
   mx.begin();
@@ -516,6 +578,15 @@ void loop()
       // don't allow setting alarm while seconds
       // are showing
       setAlarm();
+  }
+
+  alarm_btn_reading = digitalRead(ALARM_PWR_PIN); 
+  if (alarm_btn_reading == HIGH)
+  {
+    if (!display_seconds &&
+        !time_set_state &&
+        !alarm_set_state)
+      handleAlarm();
   }
 }
 

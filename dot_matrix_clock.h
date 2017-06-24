@@ -15,6 +15,9 @@
 #define HOUR_SET_PIN 5
 #define MIN_SET_PIN 6
 #define SECONDS_PIN 7
+#define BUZZER_PIN 8
+#define ALARM_PWR_PIN 9
+#define SNOOZE_PIN 12
 
 // RTC interrupt pin
 const byte rtcTimerIntPin = 2;
@@ -111,7 +114,7 @@ int period_pos = 2;
 int seconds_disp_state = 0;
 int display_seconds = 0;
 
-unsigned long debounce_delay = 50;    // the debounce time; increase if the output flickers
+unsigned long debounce_delay = 200;    // the debounce time; increase if the output flickers
 unsigned long button_hold_time = 150;
 
 // hour-setting variables
@@ -136,6 +139,12 @@ boolean ignore_min_up = false;
 
 int time_set_state = 0;
 int alarm_set_state = 0;
+int alarm_btn_state = 0;
+int alarm_btn_reading;
+int last_alarm_btn_state = 0;
+unsigned long alarm_btn_debounce_time = 0;
+int alarm_pwr_state;
+uint8_t status_register;
 int start_seconds = 0;
 int writing_time= 0;
 int time_initialized = 0;
