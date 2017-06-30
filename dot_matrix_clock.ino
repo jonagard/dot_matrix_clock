@@ -5,45 +5,38 @@
 
 void handleAlarm()
 {
-  // Test for button release and store the up time
-  if ((millis() - alarm_btn_debounce_time) > long(debounce_delay))
+  if (alarm_btn_state == HIGH)
   {
-    if (alarm_btn_reading == HIGH)
-    {
-      if (!alarm_pwr_state)
-      {
-        // alarm was not turned on, turn it on
-        alarm_pwr_state = 1;
-        mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
-        // alarm bell
-        mx.setBuffer(31, 3, bell);
-        mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
-      }
-      else
-      {
-        // alarm was on, turn it off and stop any tone
-        // being generated
-        noTone(BUZZER_PIN);
-        alarm_pwr_state = 0;
-        mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
-        // alarm bell
-        mx.setBuffer(31, 3, blank);
-        mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
-      }
-
-      // We need to reset the alarm bit in either case.  If the alarm has been
-      // off, that just means we haven't paid attention to it.  The A1F bit could
-      // still be set from the last time it was triggered.  So every time the
-      // alarm is turned on, that bit should be reset.  Coincidentally, if a user
-      // turns the alarm on right at the moment it was about to go off, this
-      // would reset the alarm until 24 hours from now.  But a user shouldn't
-      // have a real use-case for this.
-      // In the case of turning the alarm off, that's a no brainer, we need to
-      // reset the bit.
-      resetAlarmStatus();
-      alarm_btn_debounce_time = millis();
-    }
+    // alarm was not turned on, turn it on
+    alarm_pwr_state = 1;
+    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
+    // alarm bell
+    mx.setBuffer(31, 3, bell);
+    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
   }
+
+  if (alarm_btn_state == LOW)
+  {
+    // alarm was on, turn it off and stop any tone
+    // being generated
+    noTone(BUZZER_PIN);
+    alarm_pwr_state = 0;
+    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
+    // alarm bell
+    mx.setBuffer(31, 3, blank);
+    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
+  }
+
+  // We need to reset the alarm bit in either case.  If the alarm has been
+  // off, that just means we haven't paid attention to it.  The A1F bit could
+  // still be set from the last time it was triggered.  So every time the
+  // alarm is turned on, that bit should be reset.  Coincidentally, if a user
+  // turns the alarm on right at the moment it was about to go off, this
+  // would reset the alarm until 24 hours from now.  But a user shouldn't
+  // have a real use-case for this.
+  // In the case of turning the alarm off, that's a no brainer, we need to
+  // reset the bit.
+  resetAlarmStatus();
 }
 
 void setTime()
@@ -580,9 +573,18 @@ void loop()
       setAlarm();
   }
 
-  alarm_btn_reading = digitalRead(ALARM_PWR_PIN); 
-  if (alarm_btn_reading == HIGH)
+  alarm_btn_state = digitalRead(ALARM_PWR_PIN); 
+  if ((alarm_btn_state == HIGH) && (!alarm_pwr_state))
   {
+    // turn on alarm
+    if (!display_seconds &&
+        !time_set_state &&
+        !alarm_set_state)
+      handleAlarm();
+  }
+  if ((alarm_btn_state == LOW) && (alarm_pwr_state))
+  {
+    // turn off alarm
     if (!display_seconds &&
         !time_set_state &&
         !alarm_set_state)

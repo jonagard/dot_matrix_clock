@@ -139,11 +139,10 @@ boolean ignore_min_up = false;
 
 int time_set_state = 0;
 int alarm_set_state = 0;
-int alarm_btn_state = 0;
-int alarm_btn_reading;
-int last_alarm_btn_state = 0;
-unsigned long alarm_btn_debounce_time = 0;
+int alarm_btn_state;
 int alarm_pwr_state;
+int snooze_btn_state;
+int snooze_state = 0;
 uint8_t status_register;
 int start_seconds = 0;
 int writing_time= 0;
