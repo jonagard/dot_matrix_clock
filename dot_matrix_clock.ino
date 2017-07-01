@@ -21,6 +21,7 @@ void handleAlarm()
     // being generated
     noTone(BUZZER_PIN);
     alarm_pwr_state = 0;
+    alarming = 0;
     mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
     // alarm bell
     mx.setBuffer(31, 3, blank);
@@ -37,6 +38,50 @@ void handleAlarm()
   // In the case of turning the alarm off, that's a no brainer, we need to
   // reset the bit.
   resetAlarmStatus();
+}
+
+void handleSnooze()
+{
+  // Test for button release and store the up time
+  if ((millis() - snooze_btn_debounce_time) > long(debounce_delay))
+  {
+    if (snooze_btn_state == HIGH)
+    {
+      if (alarming)
+      {
+        noTone(BUZZER_PIN);
+        alarming = 0;
+
+        // this is the magic that resets us every 9 minutes,
+        // reset the A2F bit so it can come on again 9
+        // minutes from now.
+        // Also reset the alarm status.  They haven't turned
+        // the alarm off yet, but if we don't do this we'll
+        // keep triggering every check of the alarm status.
+        // The only way for them to get out of this state is
+        // to turn off the alarm. So we know it's coming.
+        // Basically, once you enter this state by hitting
+        // snooze, the only alarm you can use from that point
+        // on is snooze until you turn alarm off.
+        resetAlarmStatus();
+
+        // Write 9 minutes from now into the alarm 2 register
+        // setting hour and minute each time by default
+        // code taken from RTClib adjust()
+        Wire.beginTransmission(DS3231_I2C_ADDRESS);
+        // set to register 0xb and write two bytes
+        Wire.write(0xb);
+        // grab minute_int once here in case it changes while
+        // doing calculations
+        int minute_plus = minute_int + 9;
+        int new_minute = minute_plus % 60;
+        int new_hour = hour_int + (minute_plus / 60);
+        Wire.write(decToBcd(new_minute));
+        Wire.write(decToBcd(new_hour));
+        Wire.endTransmission();
+      }
+    }
+  }
 }
 
 void setTime()
@@ -347,6 +392,9 @@ void writeNewAlarm()
   Wire.write(decToBcd(alarm_hour_int));
   Wire.endTransmission();
 
+  // reset alarm since we just wrote a new one, just in case
+  resetAlarmStatus();
+
   setting_alarm_hour = 0;
   setting_alarm_min = 0;
 }
@@ -374,11 +422,18 @@ void initializeAlarm()
   Wire.write(0xa);
   Wire.write(decToBcd(0x80));
   Wire.endTransmission();
+
+  // do the same for alarm 2, A2M4
+  Wire.beginTransmission(DS3231_I2C_ADDRESS);
+  // set to register 0xd and write one byte
+  Wire.write(0xd);
+  Wire.write(decToBcd(0x80));
+  Wire.endTransmission();
 }
 
 void getAlarmStatus()
 {
-  // get A1F status
+  // get A1F and A2F status
   // code taken from RTClib now()
   Wire.beginTransmission(DS3231_I2C_ADDRESS);
   Wire.write(0xf);
@@ -388,13 +443,26 @@ void getAlarmStatus()
   status_register = bcdToDec(Wire.read());
 }
 
+// Reset alarm AND snooze
 void resetAlarmStatus()
 {
   getAlarmStatus();
   Wire.beginTransmission(DS3231_I2C_ADDRESS);
-  // set to register a and write one byte
+  // set to register 0xf and write one byte
   Wire.write(0xf);
-  Wire.write(decToBcd(status_register ^ 0x01));
+  Wire.write(decToBcd(status_register ^ 0x03));
+  Wire.endTransmission();
+}
+
+// Reset only snooze.  When snoozing we want to be able to reset
+// this while leaving the alarm on.
+void resetSnoozeStatus()
+{
+  getAlarmStatus();
+  Wire.beginTransmission(DS3231_I2C_ADDRESS);
+  // set to register 0xf and write one byte
+  Wire.write(0xf);
+  Wire.write(decToBcd(status_register ^ 0x02));
   Wire.endTransmission();
 }
 
@@ -404,8 +472,10 @@ void checkAlarm()
     return;
 
   getAlarmStatus();
-  if (status_register & 0x01)
+  if ((status_register & 0x01) ||
+      (status_register & 0x02))
   {
+    alarming = 1;
     tone(BUZZER_PIN, 1245, 300);
     tone(BUZZER_PIN, 988, 300);
     tone(BUZZER_PIN, 880, 300);
@@ -573,22 +643,28 @@ void loop()
       setAlarm();
   }
 
-  alarm_btn_state = digitalRead(ALARM_PWR_PIN); 
+  alarm_btn_state = digitalRead(ALARM_PWR_PIN);
   if ((alarm_btn_state == HIGH) && (!alarm_pwr_state))
   {
     // turn on alarm
-    if (!display_seconds &&
-        !time_set_state &&
+    if (!time_set_state &&
         !alarm_set_state)
       handleAlarm();
   }
   if ((alarm_btn_state == LOW) && (alarm_pwr_state))
   {
     // turn off alarm
-    if (!display_seconds &&
-        !time_set_state &&
+    if (!time_set_state &&
         !alarm_set_state)
       handleAlarm();
+  }
+
+  snooze_btn_state = digitalRead(SNOOZE_PIN);
+  if ((snooze_btn_state == HIGH) && (alarming))
+  {
+    if (!time_set_state &&
+        !alarm_set_state)
+      handleSnooze();
   }
 }
 

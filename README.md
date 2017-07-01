@@ -44,6 +44,7 @@ using the second alarm in the implementation of snooze.
 - [x] Set an alarm
 - [x] Have alarm trigger a buzzer
   - [ ] Volume control?
+- [x] Snoozer
 - [ ] Support changing brightness
 - [ ] Backup power (RTC has time backup already, this is for the display
   and alarm to still work)
