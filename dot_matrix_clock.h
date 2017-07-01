@@ -18,6 +18,7 @@
 #define BUZZER_PIN 8
 #define ALARM_PWR_PIN 9
 #define SNOOZE_PIN 12
+#define BRIGHTNESS_PIN A3
 
 // RTC interrupt pin
 const byte rtcTimerIntPin = 2;
@@ -146,11 +147,18 @@ int snooze_btn_state;
 unsigned long snooze_btn_debounce_time = 0;
 int snooze_state = 0;
 uint8_t status_register;
+
 int start_seconds = 0;
 int writing_time= 0;
 int time_initialized = 0;
 int update_flag = 0;
 unsigned long start_sep;
+
+int brightness_btn_state;
+unsigned long brightness_btn_debounce_time = 0;
+int default_brightness_index = 1;
+int brightness_index = 0;
+int brightness_options [5] = {1, 3, 5, 9, 13};
 
 /*
  * increment a value (a, which is an hour or minute) and wrap

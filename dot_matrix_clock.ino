@@ -3,6 +3,21 @@
 #include <Wire.h>
 #include "dot_matrix_clock.h"
 
+void adjustBrightness()
+{
+  // Test for button release and store the up time
+  if ((millis() - brightness_btn_debounce_time) > long(debounce_delay))
+  {
+    if (brightness_btn_state == HIGH)
+    {
+      brightness_index = (brightness_index + 1) % ((sizeof(brightness_options) /
+                                                    sizeof(int)));
+      mx.control(MD_MAX72XX::INTENSITY, brightness_options[brightness_index]);
+      brightness_btn_debounce_time = millis();
+    }
+  }
+}
+
 void handleAlarm()
 {
   if (alarm_btn_state == HIGH)
@@ -80,6 +95,7 @@ void handleSnooze()
         Wire.write(decToBcd(new_hour));
         Wire.endTransmission();
       }
+      snooze_btn_debounce_time = millis();
     }
   }
 }
@@ -582,11 +598,13 @@ void setup()
   pinMode(MIN_SET_PIN, INPUT);
   pinMode(ALARM_PWR_PIN, INPUT);
   pinMode(SNOOZE_PIN, INPUT);
+  pinMode(BRIGHTNESS_PIN, INPUT);
   // explicitly not calling pinMode on passive buzzer
 
   // setup dot matrix
   mx.begin();
-  mx.control(MD_MAX72XX::INTENSITY, 3);
+  brightness_index = default_brightness_index;
+  mx.control(MD_MAX72XX::INTENSITY, brightness_options[brightness_index]);
 
   // build the initial time and print it for a start
   updateTime();
@@ -665,6 +683,14 @@ void loop()
     if (!time_set_state &&
         !alarm_set_state)
       handleSnooze();
+  }
+
+  brightness_btn_state = digitalRead(BRIGHTNESS_PIN);
+  if ((brightness_btn_state == HIGH))
+  {
+    if (!time_set_state &&
+        !alarm_set_state)
+      adjustBrightness();
   }
 }
 

@@ -32,8 +32,8 @@ these functions.  Plus no traditional bedside alarm clock I used growing
 up (the classic red-glow, 7-segment, fake-wood clocks) had these
 functions, so I'm not motivated.
 
-The RTC supports two alarms but I intend to only support one.  I plan on
-using the second alarm in the implementation of snooze.
+The RTC supports two alarms but I intend to only support one.  The second
+alarm is used in the implementation of snooze.
 
 ### Goals
 
@@ -45,7 +45,7 @@ using the second alarm in the implementation of snooze.
 - [x] Have alarm trigger a buzzer
   - [ ] Volume control?
 - [x] Snoozer
-- [ ] Support changing brightness
+- [x] Support changing brightness
 - [ ] Backup power (RTC has time backup already, this is for the display
   and alarm to still work)
 - [ ] Show temperature?
