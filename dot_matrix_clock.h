@@ -115,13 +115,12 @@ int period_pos = 2;
 int seconds_disp_state = 0;
 int display_seconds = 0;
 
-unsigned long debounce_delay = 200;    // the debounce time; increase if the output flickers
-unsigned long button_hold_time = 150;
+unsigned long debounce_delay = 100;    // the debounce time; increase if the output flickers
+unsigned long button_hold_time = 350;
 
 // hour-setting variables
 int hour_set_state = 0;
 int last_hour_set_state = LOW;
-unsigned long last_hour_debounce_time = 0;
 int setting_hour = 0;
 int setting_alarm_hour = 0;
 long hour_up_time;
@@ -131,14 +130,23 @@ boolean ignore_hour_up = false;
 // minute-setting variables
 int min_set_state = 0;
 int last_min_set_state = LOW;
-unsigned long last_min_debounce_time = 0;
 int setting_min = 0;
 int setting_alarm_min = 0;
 long min_up_time;
 long min_down_time;
 boolean ignore_min_up = false;
 
-int time_set_state = 0;
+// brightness-setting variables
+int brightness_btn_state;
+int default_brightness_index = 1;
+int brightness_index = 0;
+int brightness_options [5] = {1, 3, 5, 9, 13};
+int last_brightness_btn_state = LOW;
+long brightness_up_time;
+long brightness_down_time;
+boolean ignore_brightness_up = false;
+
+// alarm and snooze variables
 int alarm_set_state = 0;
 int alarm_btn_state;
 int alarm_pwr_state;
@@ -148,17 +156,13 @@ unsigned long snooze_btn_debounce_time = 0;
 int snooze_state = 0;
 uint8_t status_register;
 
+// various time variables
+int time_set_state = 0;
 int start_seconds = 0;
 int writing_time= 0;
 int time_initialized = 0;
 int update_flag = 0;
 unsigned long start_sep;
-
-int brightness_btn_state;
-unsigned long brightness_btn_debounce_time = 0;
-int default_brightness_index = 1;
-int brightness_index = 0;
-int brightness_options [5] = {1, 3, 5, 9, 13};
 
 /*
  * increment a value (a, which is an hour or minute) and wrap

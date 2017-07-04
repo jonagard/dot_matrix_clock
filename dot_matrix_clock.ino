@@ -5,16 +5,41 @@
 
 void adjustBrightness()
 {
+  // Test for button pressed and store the down time
+  if (brightness_btn_state == HIGH && last_brightness_btn_state == LOW &&
+      (millis() - brightness_up_time) > long(debounce_delay)) {
+    brightness_down_time = millis();
+  }
+
   // Test for button release and store the up time
-  if ((millis() - brightness_btn_debounce_time) > long(debounce_delay))
+  if (brightness_btn_state == LOW && last_brightness_btn_state == HIGH &&
+      (millis() - brightness_down_time) > long(debounce_delay))
   {
-    if (brightness_btn_state == HIGH)
+    if (ignore_brightness_up == false)
     {
+      // change the brightness by one setting
       brightness_index = (brightness_index + 1) % ((sizeof(brightness_options) /
                                                     sizeof(int)));
       mx.control(MD_MAX72XX::INTENSITY, brightness_options[brightness_index]);
-      brightness_btn_debounce_time = millis();
     }
+    else
+    {
+      ignore_brightness_up = false;
+    }
+    brightness_up_time = millis();
+  }
+
+  // Test for button held down for longer than the hold time.
+  // In this case, set the pin to low and ignore.  I don't want
+  // the brightness cycling through really fast like hours or
+  // minutes do.  I want the brightness to only change by one
+  // per button press.
+  if (brightness_btn_state == HIGH &&
+      (millis() - brightness_down_time) > button_hold_time)
+  {
+    digitalWrite(BRIGHTNESS_PIN, LOW);
+    ignore_brightness_up = true;
+    brightness_down_time = millis();
   }
 }
 
@@ -140,7 +165,7 @@ void setTime()
       {
         ignore_hour_up = false;
       }
-      hour_down_time = millis();
+      hour_up_time = millis();
     }
 
     // Test for button held down for longer than the hold time
@@ -183,7 +208,7 @@ void setTime()
       {
         ignore_min_up = false;
       }
-      min_down_time = millis();
+      min_up_time = millis();
     }
 
     // Test for button held down for longer than the hold time
@@ -662,16 +687,10 @@ void loop()
   }
 
   alarm_btn_state = digitalRead(ALARM_PWR_PIN);
-  if ((alarm_btn_state == HIGH) && (!alarm_pwr_state))
+  if (((alarm_btn_state == HIGH) && (!alarm_pwr_state)) ||
+      ((alarm_btn_state == LOW) && (alarm_pwr_state)))
   {
     // turn on alarm
-    if (!time_set_state &&
-        !alarm_set_state)
-      handleAlarm();
-  }
-  if ((alarm_btn_state == LOW) && (alarm_pwr_state))
-  {
-    // turn off alarm
     if (!time_set_state &&
         !alarm_set_state)
       handleAlarm();
@@ -686,11 +705,16 @@ void loop()
   }
 
   brightness_btn_state = digitalRead(BRIGHTNESS_PIN);
-  if ((brightness_btn_state == HIGH))
+  // call adjust brightness if this reading is different than
+  // the last one, either the user pushed the button down or
+  // let it up.  Let the function deal with how to handle
+  // LOW and HIGH.
+  if ((brightness_btn_state != last_brightness_btn_state))
   {
     if (!time_set_state &&
         !alarm_set_state)
       adjustBrightness();
   }
+  last_brightness_btn_state = brightness_btn_state;
 }
 
