@@ -517,6 +517,9 @@ void checkAlarm()
       (status_register & 0x02))
   {
     alarming = 1;
+    tone(BUZZER_PIN, 2349, 300);
+    tone(BUZZER_PIN, 1760, 300);
+    tone(BUZZER_PIN, 1397, 300);
     tone(BUZZER_PIN, 1245, 300);
     tone(BUZZER_PIN, 988, 300);
     tone(BUZZER_PIN, 880, 300);
