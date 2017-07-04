@@ -48,5 +48,8 @@ alarm is used in the implementation of snooze.
 - [x] Support changing brightness
 - [ ] Backup power (RTC has time backup already, this is for the display
   and alarm to still work)
-- [ ] Show temperature?
+- [ ] ~~Show temperature?~~
+  - I added this functionality and the temperature was impressively off.  Other
+    thermometers in the same space were saying 72 or 73 degrees F and the RTC
+    was saying 66 degrees F.  Why even add the feature if it's that unreliable.
 - [ ] Build an enclosure
