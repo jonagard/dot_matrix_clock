@@ -155,6 +155,8 @@ int snooze_btn_state;
 unsigned long snooze_btn_debounce_time = 0;
 int snooze_state = 0;
 uint8_t status_register;
+int alarm_duration = 0;
+boolean alarm_check_toggle = false;
 
 // various time variables
 int time_set_state = 0;

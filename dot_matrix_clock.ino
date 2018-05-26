@@ -59,9 +59,10 @@ void handleAlarm()
   {
     // alarm was on, turn it off and stop any tone
     // being generated
-    noTone(BUZZER_PIN);
+    digitalWrite(BUZZER_PIN, LOW);
     alarm_pwr_state = 0;
     alarming = 0;
+    alarm_check_toggle = false;
     mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
     // alarm bell
     mx.setBuffer(31, 3, blank);
@@ -89,8 +90,9 @@ void handleSnooze()
     {
       if (alarming)
       {
-        noTone(BUZZER_PIN);
+        digitalWrite(BUZZER_PIN, LOW);
         alarming = 0;
+        alarm_check_toggle = false;
 
         // this is the magic that resets us every 9 minutes,
         // reset the A2F bit so it can come on again 9
@@ -234,16 +236,17 @@ void setTime()
 
 void setAlarm()
 {
+  PRINT_HOUR(hour_tens_pos, alarm_hour_char[0],
+             hour_ones_pos, alarm_hour_char[1],
+             alarm_hour_int, alarm_period);
+  PRINT_MIN(min_tens_pos, alarm_minute_char[0],
+            min_ones_pos, alarm_minute_char[1]);
+
   while (alarm_set_state == HIGH)
   {
     // turn the separator on, otherwise it's on or off depending on the state
     // when you hit the button
     mx.setColumn(sep_pos, 0x14);
-    PRINT_HOUR(hour_tens_pos, alarm_hour_char[0],
-               hour_ones_pos, alarm_hour_char[1],
-               alarm_hour_int, alarm_period);
-    PRINT_MIN(min_tens_pos, alarm_minute_char[0],
-              min_ones_pos, alarm_minute_char[1]);
 
     /*
      * Read hour button
@@ -507,6 +510,32 @@ void resetSnoozeStatus()
   Wire.endTransmission();
 }
 
+void soundAlarm()
+{
+  // Switch between checking for beep duration and non-beep duration
+  //
+  // The values you check against here (1000) don't actually matter.  Since
+  // checkAlarm() is called by updateTime(), which is tied to the one-second
+  // interrupt, the sound basically plays for a second and rests for a second.
+  // I moved the soundAlarm() call to the main loop and the sound could play
+  // more rapidly, but didn't sound right.  It never fully stopped making a
+  // sound.  I'm guessing this is caused by having an interrupt.  If I try
+  // this logic in an isolated program it works well and sounds right.
+
+  if (!alarm_check_toggle && (millis() - alarm_duration > 1000))
+  {
+    digitalWrite(BUZZER_PIN, HIGH);
+    alarm_duration = millis();
+    alarm_check_toggle = true;
+  }
+  else if (alarm_check_toggle && (millis() - alarm_duration > 1000))
+  {
+    digitalWrite(BUZZER_PIN, LOW);
+    alarm_duration = millis();
+    alarm_check_toggle = false;
+  }
+}
+
 void checkAlarm()
 {
   if (!alarm_pwr_state)
@@ -517,8 +546,7 @@ void checkAlarm()
       (status_register & 0x02))
   {
     alarming = 1;
-    tone(BUZZER_PIN, 988, 300);
-    tone(BUZZER_PIN, 1976, 300);
+    soundAlarm();
   }
 }
 
@@ -622,7 +650,8 @@ void setup()
   pinMode(ALARM_PWR_PIN, INPUT);
   pinMode(SNOOZE_PIN, INPUT);
   pinMode(BRIGHTNESS_PIN, INPUT);
-  // explicitly not calling pinMode on passive buzzer
+  // this is an active buzzer
+  pinMode(BUZZER_PIN, OUTPUT);
 
   // setup dot matrix
   mx.begin();
