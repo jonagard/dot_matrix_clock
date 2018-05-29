@@ -6,14 +6,16 @@
 void adjustBrightness()
 {
   // Test for button pressed and store the down time
-  if (brightness_btn_state == HIGH && last_brightness_btn_state == LOW &&
-      (millis() - brightness_up_time) > long(debounce_delay)) {
+  if ((brightness_btn_state == HIGH) &&
+      (last_brightness_btn_state == LOW) &&
+      ((millis() - brightness_up_time) > long(debounce_delay))) {
     brightness_down_time = millis();
   }
 
   // Test for button release and store the up time
-  if (brightness_btn_state == LOW && last_brightness_btn_state == HIGH &&
-      (millis() - brightness_down_time) > long(debounce_delay))
+  if ((brightness_btn_state == LOW) &&
+      (last_brightness_btn_state == HIGH) &&
+      ((millis() - brightness_down_time) > long(debounce_delay)))
   {
     if (ignore_brightness_up == false)
     {
@@ -30,14 +32,13 @@ void adjustBrightness()
   }
 
   /*
-   * Test for button held down for longer than the hold time.
-   * In this case, set the pin to low and ignore.  I don't want
-   * the brightness cycling through really fast like hours or
-   * minutes do.  I want the brightness to only change by one
-   * per button press.
+   * Test for button held down for longer than the hold time.  In this case, set
+   * the pin to low and ignore.  I don't want the brightness cycling through
+   * really fast like hours or minutes do.  I want the brightness to only change
+   * by one per button press.
    */
-  if (brightness_btn_state == HIGH &&
-      (millis() - brightness_down_time) > button_hold_time)
+  if ((brightness_btn_state == HIGH) &&
+      ((millis() - brightness_down_time) > button_hold_time))
   {
     digitalWrite(BRIGHTNESS_PIN, LOW);
     ignore_brightness_up = true;
@@ -59,27 +60,27 @@ void handleAlarm()
 
   if (alarm_btn_state == LOW)
   {
-    // alarm was on, turn it off and stop any tone
-    // being generated
+    // alarm was on, turn it off and stop any tone being generated
     digitalWrite(BUZZER_PIN, LOW);
     alarm_pwr_state = 0;
     alarming = 0;
-    alarm_check_toggle = false;
     mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
     // alarm bell
     mx.setBuffer(31, 3, blank);
     mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
   }
 
-  // We need to reset the alarm bit in either case.  If the alarm has been
-  // off, that just means we haven't paid attention to it.  The A1F bit could
-  // still be set from the last time it was triggered.  So every time the
-  // alarm is turned on, that bit should be reset.  Coincidentally, if a user
-  // turns the alarm on right at the moment it was about to go off, this
-  // would reset the alarm until 24 hours from now.  But a user shouldn't
-  // have a real use-case for this.
-  // In the case of turning the alarm off, that's a no brainer, we need to
-  // reset the bit.
+  /*
+   * We need to reset the alarm bit in either case.  If the alarm has been off,
+   * that just means we haven't paid attention to it.  The A1F bit could still
+   * be set from the last time it was triggered.  So every time the alarm is
+   * turned on, that bit should be reset.  Coincidentally, if a user turns the
+   * alarm on right at the moment it was about to go off, this would reset the
+   * alarm until 24 hours from now.  But a user shouldn't have a real use-case
+   * for this.
+   * In the case of turning the alarm off, that's a no brainer, we need to reset
+   * the bit.
+   */
   resetAlarmStatus();
 }
 
@@ -94,29 +95,28 @@ void handleSnooze()
       {
         digitalWrite(BUZZER_PIN, LOW);
         alarming = 0;
-        alarm_check_toggle = false;
 
-        // this is the magic that resets us every 9 minutes,
-        // reset the A2F bit so it can come on again 9
-        // minutes from now.
-        // Also reset the alarm status.  They haven't turned
-        // the alarm off yet, but if we don't do this we'll
-        // keep triggering every check of the alarm status.
-        // The only way for them to get out of this state is
-        // to turn off the alarm. So we know it's coming.
-        // Basically, once you enter this state by hitting
-        // snooze, the only alarm you can use from that point
-        // on is snooze until you turn alarm off.
+        /*
+         * this is the magic that resets us every 9 minutes, reset the A2F bit
+         * so it can come on again 9 minutes from now.
+         * Also reset the alarm status.  They haven't turned the alarm off yet,
+         * but if we don't do this we'll keep triggering every check of the
+         * alarm status.  The only way for them to get out of this state is to
+         * turn off the alarm. So we know it's coming.  Basically, once you
+         * enter this state by hitting snooze, the only alarm you can use from
+         * that point on is snooze until you turn alarm off.
+         */
         resetAlarmStatus();
 
-        // Write 9 minutes from now into the alarm 2 register
-        // setting hour and minute each time by default
-        // code taken from RTClib adjust()
+        /*
+         * Write 9 minutes from now into the alarm 2 register
+         * setting hour and minute each time by default
+         * code taken from RTClib adjust()
+         */
         Wire.beginTransmission(DS3231_I2C_ADDRESS);
         // set to register 0xb and write two bytes
         Wire.write(0xb);
-        // grab minute_int once here in case it changes while
-        // doing calculations
+        // grab minute_int once here in case it changes while doing calculations
         int minute_plus = minute_int + 9;
         int new_minute = minute_plus % 60;
         int new_hour = hour_int + (minute_plus / 60);
@@ -133,8 +133,7 @@ void setTime()
 {
   while (time_set_state == HIGH)
   {
-    // turn the separator on, otherwise it's on or off depending on the state
-    // when you hit the button
+    // turn the separator on, it might have been off when button was hit
     mx.setColumn(sep_pos, 0x14);
 
     /*
@@ -147,14 +146,17 @@ void setTime()
     int hour_set_state = digitalRead(HOUR_SET_PIN);
 
     // Test for button pressed and store the down time
-    if (hour_set_state == HIGH && last_hour_set_state == LOW &&
-        (millis() - hour_up_time) > long(debounce_delay)) {
+    if ((hour_set_state == HIGH) &&
+        (last_hour_set_state == LOW) &&
+        ((millis() - hour_up_time) > long(debounce_delay)))
+    {
       hour_down_time = millis();
     }
 
     // Test for button release and store the up time
-    if (hour_set_state == LOW && last_hour_set_state == HIGH &&
-        (millis() - hour_down_time) > long(debounce_delay))
+    if ((hour_set_state == LOW) &&
+        (last_hour_set_state == HIGH) &&
+        ((millis() - hour_down_time) > long(debounce_delay)))
     {
       if (ignore_hour_up == false)
       {
@@ -173,8 +175,8 @@ void setTime()
     }
 
     // Test for button held down for longer than the hold time
-    if (hour_set_state == HIGH &&
-        (millis() - hour_down_time) > button_hold_time)
+    if ((hour_set_state == HIGH) &&
+        ((millis() - hour_down_time) > button_hold_time))
     {
       setting_hour = 1;
       INCR(hour_int, 23);
@@ -186,20 +188,21 @@ void setTime()
       hour_down_time = millis();
     }
 
-    /*
-     * Read minute button
-     */
+    // Read minute button
     int min_set_state = digitalRead(MIN_SET_PIN);
 
     // Test for button pressed and store the down time
-    if (min_set_state == HIGH && last_min_set_state == LOW &&
-        (millis() - min_up_time) > long(debounce_delay)) {
+    if ((min_set_state == HIGH) &&
+        (last_min_set_state == LOW) &&
+        ((millis() - min_up_time) > long(debounce_delay)))
+    {
       min_down_time = millis();
     }
 
     // Test for button release and store the up time
-    if (min_set_state == LOW && last_min_set_state == HIGH &&
-        (millis() - min_down_time) > long(debounce_delay))
+    if ((min_set_state == LOW) &&
+        (last_min_set_state == HIGH) &&
+        ((millis() - min_down_time) > long(debounce_delay)))
     {
       if (ignore_min_up == false)
       {
@@ -216,8 +219,8 @@ void setTime()
     }
 
     // Test for button held down for longer than the hold time
-    if (min_set_state == HIGH &&
-        (millis() - min_down_time) > button_hold_time)
+    if ((min_set_state == HIGH) &&
+        ((millis() - min_down_time) > button_hold_time))
     {
       setting_min = 1;
       INCR(minute_int, 59);
@@ -246,8 +249,7 @@ void setAlarm()
 
   while (alarm_set_state == HIGH)
   {
-    // turn the separator on, otherwise it's on or off depending on the state
-    // when you hit the button
+    // turn the separator on, it might have been off when button was hit
     mx.setColumn(sep_pos, 0x14);
 
     /*
@@ -260,14 +262,17 @@ void setAlarm()
     int hour_set_state = digitalRead(HOUR_SET_PIN);
 
     // Test for button pressed and store the down time
-    if (hour_set_state == HIGH && last_hour_set_state == LOW &&
-        (millis() - hour_up_time) > long(debounce_delay)) {
+    if ((hour_set_state == HIGH) &&
+        (last_hour_set_state == LOW) &&
+        ((millis() - hour_up_time) > long(debounce_delay)))
+    {
       hour_down_time = millis();
     }
 
     // Test for button release and store the up time
-    if (hour_set_state == LOW && last_hour_set_state == HIGH &&
-        (millis() - hour_down_time) > long(debounce_delay))
+    if ((hour_set_state == LOW) &&
+        (last_hour_set_state == HIGH) &&
+        ((millis() - hour_down_time) > long(debounce_delay)))
     {
       if (ignore_hour_up == false)
       {
@@ -286,8 +291,8 @@ void setAlarm()
     }
 
     // Test for button held down for longer than the hold time
-    if (hour_set_state == HIGH &&
-        (millis() - hour_down_time) > button_hold_time)
+    if ((hour_set_state == HIGH) &&
+        ((millis() - hour_down_time) > button_hold_time))
     {
       setting_alarm_hour = 1;
       INCR(alarm_hour_int, 23);
@@ -299,20 +304,21 @@ void setAlarm()
       hour_down_time = millis();
     }
 
-    /*
-     * Read minute button
-     */
+    // Read minute button
     int min_set_state = digitalRead(MIN_SET_PIN);
 
     // Test for button pressed and store the down time
-    if (min_set_state == HIGH && last_min_set_state == LOW &&
-        (millis() - min_up_time) > long(debounce_delay)) {
+    if ((min_set_state == HIGH) &&
+        (last_min_set_state == LOW) &&
+        ((millis() - min_up_time) > long(debounce_delay)))
+    {
       min_down_time = millis();
     }
 
     // Test for button release and store the up time
-    if (min_set_state == LOW && last_min_set_state == HIGH &&
-        (millis() - min_down_time) > long(debounce_delay))
+    if ((min_set_state == LOW) &&
+        (last_min_set_state == HIGH) &&
+        ((millis() - min_down_time) > long(debounce_delay)))
     {
       if (ignore_min_up == false)
       {
@@ -330,8 +336,8 @@ void setAlarm()
     }
 
     // Test for button held down for longer than the hold time
-    if (min_set_state == HIGH &&
-        (millis() - min_down_time) > button_hold_time)
+    if ((min_set_state == HIGH) &&
+        ((millis() - min_down_time) > button_hold_time))
     {
       setting_alarm_min = 1;
       INCR(alarm_minute_int, 59);
@@ -354,11 +360,11 @@ void setAlarm()
 }
 
 /*
- * I made the printing of minutes and hours a macro.  I am not doing so
- * with seconds.  For some reason when I printed this way the seconds
- * never printed.  The minutes stayed up.  I didn't feel like debugging.
- * My main goal was using the same handling to print minutes/hours for
- * alarm and time anyway.  Seconds are only called in one context.
+ * I made the printing of minutes and hours a macro.  I am not doing so with
+ * seconds.  For some reason when I printed this way the seconds never printed.
+ * The minutes stayed up.  I didn't feel like debugging.  My main goal was using
+ * the same handling to print minutes/hours for alarm and time anyway.  Seconds
+ * are only called in one context.
  */
 void printSeconds()
 {
@@ -415,11 +421,13 @@ void writeNewTime()
     Wire.write(0);
     Wire.write(decToBcd(0));
     Wire.write(decToBcd(minute_int));
-    // The set time function will stay in a loop until the
-    // time set button is released.  So someone could set
-    // both hour and minutes while holding the button down.
-    // While it may be rare, it's safer to set the hour every
-    // time the minute is changed.
+    /*
+     * The set time function will stay in a loop until the
+     * time set button is released.  So someone could set
+     * both hour and minutes while holding the button down.
+     * While it may be rare, it's safer to set the hour every
+     * time the minute is changed.
+     */
     Wire.write(decToBcd(hour_int));
     Wire.endTransmission();
   }
@@ -449,9 +457,11 @@ void writeNewAlarm()
 
 void initializeAlarm()
 {
-  // get alarm minute and hour
-  // ignore seconds because alarm seconds will always be zero
-  // code taken from RTClib now()
+  /*
+   * get alarm minute and hour
+   * ignore seconds because alarm seconds will always be zero
+   * code taken from RTClib now()
+   */
   Wire.beginTransmission(DS3231_I2C_ADDRESS);
   // alarm 1 minutes register
   Wire.write(8);
@@ -463,8 +473,10 @@ void initializeAlarm()
   BLD_HOUR_STR(alarm_hour_char, alarm_hour_str, alarm_hour_int)
   BLD_MIN_SEC_STR(alarm_minute_char, alarm_minute_str, alarm_minute_int);
 
-  // Set the A1M4 bit to 1 so that the alarm matches on hour/minute/second
-  // Otherwise it would match on date as well, and I'm not setting dates
+  /*
+   * Set the A1M4 bit to 1 so that the alarm matches on hour/minute/second
+   * Otherwise it would match on date as well, and I'm not setting dates
+   */
   Wire.beginTransmission(DS3231_I2C_ADDRESS);
   // set to register a and write one byte
   Wire.write(0xa);
@@ -502,8 +514,10 @@ void resetAlarmStatus()
   Wire.endTransmission();
 }
 
-// Reset only snooze.  When snoozing we want to be able to reset
-// this while leaving the alarm on.
+/*
+ * Reset only snooze.  When snoozing we want to be able to reset this while
+ * leaving the alarm on.
+ */
 void resetSnoozeStatus()
 {
   getAlarmStatus();
@@ -567,18 +581,23 @@ void updateTime()
   // update the time
   if (!setting_min)
   {
-    if (!time_initialized || second_int != new_second_int)
+    if (!time_initialized ||
+        (second_int != new_second_int))
     {
       // blink on the separator
       mx.setColumn(sep_pos, 0x14);
       start_sep = millis();
       second_int = new_second_int;
       BLD_MIN_SEC_STR(second_char, second_str, second_int);
-    } else if (!display_seconds && ((millis() - start_sep) > 499))
+    }
+    else if (!display_seconds && ((millis() - start_sep) > 499))
+    {
       // blink off separator
       mx.setColumn(sep_pos, 0x00);
+    }
 
-    if (!time_initialized || minute_int != new_minute_int)
+    if (!time_initialized ||
+        (minute_int != new_minute_int))
     {
       minute_int = new_minute_int;
       BLD_MIN_SEC_STR(minute_char, minute_str, minute_int);
@@ -587,7 +606,8 @@ void updateTime()
   }
   if (!setting_hour)
   {
-    if (!time_initialized || hour_int != new_hour_int)
+    if (!time_initialized ||
+        (hour_int != new_hour_int))
     {
       hour_int = new_hour_int;
       BLD_HOUR_STR(hour_char, hour_str, hour_int)
@@ -649,8 +669,7 @@ void loop()
   if (time_set_state == HIGH)
   {
     if (!display_seconds && !alarm_set_state)
-      // don't allow setting time while seconds
-      // are showing
+      // don't allow setting time while seconds are showing
       setTime();
   }
 
@@ -658,14 +677,15 @@ void loop()
   if (alarm_set_state == HIGH)
   {
     if (!display_seconds && !time_set_state)
-      // don't allow setting alarm while seconds
-      // are showing
+      // don't allow setting alarm while seconds are showing
       setAlarm();
   }
 
   alarm_btn_state = digitalRead(ALARM_PWR_PIN);
-  if (((alarm_btn_state == HIGH) && (!alarm_pwr_state)) ||
-      ((alarm_btn_state == LOW) && (alarm_pwr_state)))
+  if (((alarm_btn_state == HIGH) &&
+       (!alarm_pwr_state)) ||
+      ((alarm_btn_state == LOW) &&
+       (alarm_pwr_state)))
   {
     // turn on alarm
     if (!time_set_state &&
@@ -682,11 +702,13 @@ void loop()
   }
 
   brightness_btn_state = digitalRead(BRIGHTNESS_PIN);
-  // call adjust brightness if this reading is different than
-  // the last one, either the user pushed the button down or
-  // let it up.  Let the function deal with how to handle
-  // LOW and HIGH.
-  if ((brightness_btn_state != last_brightness_btn_state))
+  /*
+   * call adjust brightness if this reading is different than
+   * the last one, either the user pushed the button down or
+   * let it up.  Let the function deal with how to handle
+   * LOW and HIGH.
+   */
+  if (brightness_btn_state != last_brightness_btn_state)
   {
     if (!time_set_state &&
         !alarm_set_state)

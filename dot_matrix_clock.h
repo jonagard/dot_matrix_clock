@@ -30,15 +30,15 @@ RTC_DS3231 rtc;
 #define DS3231_I2C_ADDRESS 0x68
 
 /*
- * Using mx.setChar() for ease to print one char at a time.  This means
- * it gets a bit kludgey converting the integer time to a char array.
- * Will have to convert each part to a string first and then convert
- * the string to an array.  That means each part needs an integer, string,
- * and character array representation.
+ * Using mx.setChar() for ease to print one char at a time.  This means it gets
+ * a bit kludgey converting the integer time to a char array.  Will have to
+ * convert each part to a string first and then convert the string to an array.
+ * That means each part needs an integer, string, and character array
+ * representation.
  *
- * I could use one function pretty easily to convert second and minute
- * and get rid of a couple of these. But then I'd have to pass variables
- * around.  I like how easy these are to call this way.
+ * I could use one function pretty easily to convert second and minute and get
+ * rid of a couple of these. But then I'd have to pass variables around.  I like
+ * how easy these are to call this way.
  */
 uint8_t second_int = 0;
 String second_str;
@@ -112,7 +112,8 @@ int period_pos = 2;
 int seconds_disp_state = 0;
 int display_seconds = 0;
 
-unsigned long debounce_delay = 100;    // the debounce time; increase if the output flickers
+// the debounce time; increase if the output flickers
+unsigned long debounce_delay = 100;
 unsigned long button_hold_time = 350;
 
 // hour-setting variables
@@ -165,17 +166,15 @@ int update_flag = 0;
 unsigned long start_sep = 0;
 
 /*
- * increment a value (a, which is an hour or minute) and wrap
- * if it is greater than the limit (b, which is 23 or 59)
- * since there isn't something to do in both the if and else
- * part of the statement, setup the logic so value is set to
- * zero in the else (I can leave the if blank but not the else)
+ * increment a value (a, which is an hour or minute) and wrap if it is greater
+ * than the limit (b, which is 23 or 59) since there isn't something to do in
+ * both the if and else part of the statement, setup the logic so value is set
+ * to zero in the else (I can leave the if blank but not the else)
  */
 #define INCR(a, b) ((++a <= b) ? :a = 0)
 
 /*
- * build the string version of the minute or second and put
- * it in the char array
+ * build the string version of the minute or second and put it in the char array
  *
  * a - min or second char array
  * b - min or second string
@@ -188,24 +187,25 @@ unsigned long start_sep = 0;
   b.toCharArray(a, 3);
 
 /*
- * build the string version for the hour and put it in the
- * char array
+ * build the string version for the hour and put it in the char array
  *
  * a - hour char array
  * b - hour string
  * c - hour integer
  *
- * If the hour is 0, we want to print 12.  Do so by making
- * the adjustment var -12, so that (0 - (-12)) == 12.
- * Otherwise if time is greater than 12 adjust the time
- * by 12 since we aren't doing 24-hour time.
+ * If the hour is 0, we want to print 12.  Do so by making the adjustment var
+ * -12, so that (0 - (-12)) == 12.  Otherwise if time is greater than 12 adjust
+ * the time by 12 since we aren't doing 24-hour time.
  *
- * Do some work here to deal with a single-length hour (1-9)
- * rather than dealing with it in the printing.  Single-length looks
- * like:
+ * Do some work here to deal with a single-length hour (1-9) rather than dealing
+ * with it in the printing.  Single-length looks like:
+ *
  * ['1']['\0']
+ *
  * So shift things over and put a literal 0 in the zero position:
+ *
  * [0]['1']['\0]
+ *
  * That literal 0 won't print out five columns, so I still have to
  * call CLEAR_DISP().  Mostly just keeping something in it in case.
  */
@@ -271,11 +271,10 @@ unsigned long start_sep = 0;
   }
 
 /*
- * Macro to clear positions on the display.  For hours I just need to
- * clear the tens position.  But when printing seconds I need to clear
- * the period and the ones hour position.  So try using this
- * one-size-fits-all approach as I doubt there will be any negative
- * fallout.
+ * Macro to clear positions on the display.  For hours I just need to clear the
+ * tens position.  But when printing seconds I need to clear the period and the
+ * ones hour position.  So try using this one-size-fits-all approach as I doubt
+ * there will be any negative fallout.
  */
 #define CLEAR_DISP() \
   mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF); \
