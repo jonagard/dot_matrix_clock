@@ -29,11 +29,13 @@ void adjustBrightness()
     brightness_up_time = millis();
   }
 
-  // Test for button held down for longer than the hold time.
-  // In this case, set the pin to low and ignore.  I don't want
-  // the brightness cycling through really fast like hours or
-  // minutes do.  I want the brightness to only change by one
-  // per button press.
+  /*
+   * Test for button held down for longer than the hold time.
+   * In this case, set the pin to low and ignore.  I don't want
+   * the brightness cycling through really fast like hours or
+   * minutes do.  I want the brightness to only change by one
+   * per button press.
+   */
   if (brightness_btn_state == HIGH &&
       (millis() - brightness_down_time) > button_hold_time)
   {
@@ -361,6 +363,8 @@ void setAlarm()
 void printSeconds()
 {
   CLEAR_DISP();
+  // turn the separator on
+  mx.setColumn(sep_pos, 0x14);
   mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
   mx.setChar(min_tens_pos, second_char[0]);
   mx.setChar(min_ones_pos, second_char[1]);
@@ -510,32 +514,6 @@ void resetSnoozeStatus()
   Wire.endTransmission();
 }
 
-void soundAlarm()
-{
-  // Switch between checking for beep duration and non-beep duration
-  //
-  // The values you check against here (1000) don't actually matter.  Since
-  // checkAlarm() is called by updateTime(), which is tied to the one-second
-  // interrupt, the sound basically plays for a second and rests for a second.
-  // I moved the soundAlarm() call to the main loop and the sound could play
-  // more rapidly, but didn't sound right.  It never fully stopped making a
-  // sound.  I'm guessing this is caused by having an interrupt.  If I try
-  // this logic in an isolated program it works well and sounds right.
-
-  if (!alarm_check_toggle && (millis() - alarm_duration > 1000))
-  {
-    digitalWrite(BUZZER_PIN, HIGH);
-    alarm_duration = millis();
-    alarm_check_toggle = true;
-  }
-  else if (alarm_check_toggle && (millis() - alarm_duration > 1000))
-  {
-    digitalWrite(BUZZER_PIN, LOW);
-    alarm_duration = millis();
-    alarm_check_toggle = false;
-  }
-}
-
 void checkAlarm()
 {
   if (!alarm_pwr_state)
@@ -546,20 +524,14 @@ void checkAlarm()
       (status_register & 0x02))
   {
     alarming = 1;
-    soundAlarm();
+    digitalWrite(BUZZER_PIN, HIGH);
   }
 }
 
 void updateTime()
 {
-  // blink on separator
-  mx.setColumn(sep_pos, 0x14);
-
   if (writing_time)
-  {
-    update_flag = 0;
     return;
-  }
 
   // get time
   // code taken from RTClib now()
@@ -597,9 +569,15 @@ void updateTime()
   {
     if (!time_initialized || second_int != new_second_int)
     {
+      // blink on the separator
+      mx.setColumn(sep_pos, 0x14);
+      start_sep = millis();
       second_int = new_second_int;
       BLD_MIN_SEC_STR(second_char, second_str, second_int);
-    }
+    } else if (!display_seconds && ((millis() - start_sep) > 499))
+      // blink off separator
+      mx.setColumn(sep_pos, 0x00);
+
     if (!time_initialized || minute_int != new_minute_int)
     {
       minute_int = new_minute_int;
@@ -620,27 +598,11 @@ void updateTime()
   checkAlarm();
 }
 
-// The function called at the 1Hz interrupt.  Can't do any
-// real work here.  Just set the update_flag and let the
-// loop do work based on its status.
-void setUpdateFlag()
-{
-  update_flag = 1;
-}
-
 void setup()
 {
   Serial.begin(9600);
 
   Wire.begin();
-
-  // set up to handle interrupt from 1Hz pin
-  pinMode(rtcTimerIntPin, INPUT_PULLUP);
-  rtc.begin();
-  // enable the 1Hz output
-  rtc.writeSqwPinMode(DS3231_SquareWave1Hz);
-  attachInterrupt(digitalPinToInterrupt(rtcTimerIntPin),
-                  setUpdateFlag, FALLING);
 
   pinMode(SECONDS_PIN, INPUT);
   pinMode(TIME_SET_PIN, INPUT);
@@ -669,23 +631,11 @@ void setup()
 
 void loop()
 {
-  if (update_flag)
+  updateTime();
+
+  if (display_seconds)
   {
-    updateTime();
-    // save time the blinker came on, will use this to turn it
-    // off below
-    start_sep = millis();
-    if (display_seconds)
-    {
-      printSeconds();
-    }
-    update_flag = 0;
-  }
-  else
-  {
-    if ((millis() - start_sep) > 499)
-      // blink off separator
-      mx.setColumn(sep_pos, 0x00);
+    printSeconds();
   }
 
   seconds_disp_state = digitalRead(SECONDS_PIN);

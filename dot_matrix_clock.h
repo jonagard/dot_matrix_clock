@@ -20,9 +20,6 @@
 #define SNOOZE_PIN 12
 #define BRIGHTNESS_PIN A3
 
-// RTC interrupt pin
-const byte rtcTimerIntPin = 2;
-
 // Define the number of devices we have in the chain and the hardware interface
 #define  MAX_DEVICES 4
 // SPI hardware interface
@@ -157,6 +154,7 @@ int snooze_state = 0;
 uint8_t status_register;
 int alarm_duration = 0;
 boolean alarm_check_toggle = false;
+int beep_count = 0;
 
 // various time variables
 int time_set_state = 0;
@@ -164,7 +162,7 @@ int start_seconds = 0;
 int writing_time= 0;
 int time_initialized = 0;
 int update_flag = 0;
-unsigned long start_sep;
+unsigned long start_sep = 0;
 
 /*
  * increment a value (a, which is an hour or minute) and wrap
