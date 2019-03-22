@@ -1,13 +1,15 @@
 ### Summary
 
+![Protoype picture](IMG_20190322_015840763.jpg?raw=true "Prototype")
+
 This is an arduino-based clock using a 7219 dot matrix display:
 
 https://www.amazon.com/Wangdd22-MAX7219-Arduino-Microcontroller-Display/dp/B01EJ1AFW8
 
-For now the plan is to be like a traditional bedside alarm clock.  It
-should support setting time, setting an alarm, displaying seconds, and
-changing brightness.  It supports a backup battery source, 3 AA
-batteries, to get a user through the night should the power go out.
+This is an alarm clock based on a traditional bedside alarm clock.  It
+supports setting time, setting an alarm, displaying seconds, and changing
+brightness.  It supports a backup battery source, 3 AA batteries, to get
+a user through the night should the power go out.
 
 Clock is based on the DS3231 RTC:
 
