@@ -3,6 +3,10 @@
 #include <Wire.h>
 #include "dot_matrix_clock.h"
 
+/*******************************************************************************
+ * Utility Functions                                                           *
+ ******************************************************************************/
+
 void adjustBrightness()
 {
   // Test for button pressed and store the down time
@@ -46,87 +50,201 @@ void adjustBrightness()
   }
 }
 
-void handleAlarm()
+/*
+ * Convert normal decimal numbers to binary coded decimal
+ */
+byte decToBcd(byte val)
 {
-  if (alarm_btn_state == HIGH)
-  {
-    // alarm was not turned on, turn it on
-    alarm_pwr_state = 1;
-    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
-    // alarm bell
-    mx.setBuffer(31, 3, bell);
-    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
-  }
-
-  if (alarm_btn_state == LOW)
-  {
-    // alarm was on, turn it off and stop any tone being generated
-    digitalWrite(BUZZER_PIN, LOW);
-    alarm_pwr_state = 0;
-    alarming = 0;
-    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
-    // alarm bell
-    mx.setBuffer(31, 3, blank);
-    mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
-  }
-
-  /*
-   * We need to reset the alarm bit in either case.  If the alarm has been off,
-   * that just means we haven't paid attention to it.  The A1F bit could still
-   * be set from the last time it was triggered.  So every time the alarm is
-   * turned on, that bit should be reset.  Coincidentally, if a user turns the
-   * alarm on right at the moment it was about to go off, this would reset the
-   * alarm until 24 hours from now.  But a user shouldn't have a real use-case
-   * for this.
-   * In the case of turning the alarm off, that's a no brainer, we need to reset
-   * the bit.
-   */
-  resetAlarmStatus();
+  return( (val/10*16) + (val%10) );
 }
 
-void handleSnooze()
+/*
+ * Convert binary coded decimal to normal decimal numbers
+ */
+byte bcdToDec(byte val)
 {
-  // Test for button release and store the up time
-  if ((millis() - snooze_btn_debounce_time) > long(debounce_delay))
+  return( (val/16*10) + (val%16) );
+}
+
+/*
+ * Print the ":" separator, or turn it off
+ */
+void print_separator(int value)
+{
+  if (value)
+    mx.setColumn(sep_pos, 0x14);
+  else
+    mx.setColumn(sep_pos, 0x00);
+}
+
+/*
+ * Print the symbols on the left-most columns, some combination of alarm bell,
+ * backup status, or low battery
+ */
+void print_symbols()
+{
+  uint8_t * bitmap = blank;
+
+  // prioritize the low battery over backup
+  if (alarm_pwr_state)
   {
-    if (snooze_btn_state == HIGH)
-    {
-      if (alarming)
-      {
-        digitalWrite(BUZZER_PIN, LOW);
-        alarming = 0;
-
-        /*
-         * this is the magic that resets us every 9 minutes, reset the A2F bit
-         * so it can come on again 9 minutes from now.
-         * Also reset the alarm status.  They haven't turned the alarm off yet,
-         * but if we don't do this we'll keep triggering every check of the
-         * alarm status.  The only way for them to get out of this state is to
-         * turn off the alarm. So we know it's coming.  Basically, once you
-         * enter this state by hitting snooze, the only alarm you can use from
-         * that point on is snooze until you turn alarm off.
-         */
-        resetAlarmStatus();
-
-        /*
-         * Write 9 minutes from now into the alarm 2 register
-         * setting hour and minute each time by default
-         * code taken from RTClib adjust()
-         */
-        Wire.beginTransmission(DS3231_I2C_ADDRESS);
-        // set to register 0xb and write two bytes
-        Wire.write(0xb);
-        // grab minute_int once here in case it changes while doing calculations
-        int minute_plus = minute_int + 9;
-        int new_minute = minute_plus % 60;
-        int new_hour = hour_int + (minute_plus / 60);
-        Wire.write(decToBcd(new_minute));
-        Wire.write(decToBcd(new_hour));
-        Wire.endTransmission();
-      }
-      snooze_btn_debounce_time = millis();
-    }
+    if (low_battery)
+      bitmap = bell_low;
+    else if (!last_vin_state)
+      bitmap = bell_backup;
+    else
+      bitmap = bell;
   }
+  else if (low_battery)
+    bitmap = low;
+  else if (!last_vin_state)
+    bitmap = backup;
+  else
+    bitmap = blank;
+
+  mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
+  mx.setBuffer(31, 3, bitmap);
+  mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
+}
+
+/*
+ * Check the vin from the power adapter.  If it is newly-found dead, decrease
+ * brightness and stop blinking the separator to save battery.  If the power is
+ * newlyfound alive, restore brightness to default and start blinking again.
+ */
+void check_power_state()
+{
+  int vin_state = analogRead(VIN_LEVEL);
+
+  if ((!vin_state) && (last_vin_state == 1))
+  {
+    // vin is dead and it was alive at the last check
+    brightness_index = 0;
+    mx.control(MD_MAX72XX::INTENSITY, brightness_options[brightness_index]);
+    print_separator(1);
+    blink_sep_enable = 0;
+    last_vin_state = 0;
+    print_symbols();
+  }
+  else if ((vin_state) && (last_vin_state == 0))
+  {
+    // vin is alive and it was dead at the last check
+    brightness_index = default_brightness_index;
+    mx.control(MD_MAX72XX::INTENSITY, brightness_options[brightness_index]);
+    blink_sep_enable = 1;
+    last_vin_state = 1;
+    print_symbols();
+  }
+}
+
+/*
+ * Check the battery level.  If low, print the "L" symbol.
+ *
+ * HT:  https://startingelectronics.org/articles/arduino/measuring-voltage-with-arduino/
+ *
+ * I'm not worrying about checking this at clock startup.  Just check it every
+ * time the hour changes.  Downside to only checking at the hour change: if you
+ * put in new batteries, or take batteries out, it could take up to an hour for
+ * the status to change.  Trade-off is I hopefully use less battery by not
+ * checking it frequently.
+ */
+void check_battery_level()
+{
+  int num_samples = 10;
+  int sum = 0;
+  unsigned char sample_count = 0;
+
+  while (sample_count < num_samples) {
+    sum += analogRead(BATTERY_LEVEL);
+    sample_count++;
+    delay(10);
+  }
+  battery_voltage = ((float)sum / (float)num_samples * 5.015) / 1024.0;
+
+  // Don't warn if there are no batteries (voltage == 0)
+  if ((!low_battery) &&
+      ((battery_voltage < BAT_THRESHOLD) && (battery_voltage > 0)))
+  {
+    // battery is low and it was not low on the last check
+    low_battery = 1;
+    print_symbols();
+  }
+  else if ((low_battery) &&
+           ((battery_voltage > BAT_THRESHOLD) || (battery_voltage == 0)))
+  {
+    // battery is ok and it was low on the last check, or no battery
+    low_battery = 0;
+    print_symbols();
+  }
+}
+
+/*******************************************************************************
+ * Time Functions                                                              *
+ ******************************************************************************/
+
+/*
+ * I made the printing of minutes and hours a macro.  I am not doing so with
+ * seconds.  For some reason when I printed this way the seconds never printed.
+ * The minutes stayed up.  I didn't feel like debugging.  My main goal was using
+ * the same handling to print minutes/hours for alarm and time anyway.  Seconds
+ * are only called in one context.
+ */
+void printSeconds()
+{
+  CLEAR_DISP();
+  // turn the separator on
+  print_separator(1);
+  mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
+  mx.setChar(min_tens_pos, second_char[0]);
+  mx.setChar(min_ones_pos, second_char[1]);
+  mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
+}
+
+void printTime()
+{
+  PRINT_MIN(min_tens_pos, minute_char[0],
+            min_ones_pos, minute_char[1]);
+  PRINT_HOUR(hour_tens_pos, hour_char[0],
+             hour_ones_pos, hour_char[1],
+             hour_int, period);
+}
+
+void writeNewTime()
+{
+  writing_time = 1;
+
+  if (setting_hour && !setting_min)
+  {
+    // setting just hour
+    // code taken from RTClib adjust()
+    Wire.beginTransmission(DS3231_I2C_ADDRESS);
+    // set to register 2 and write one byte
+    Wire.write(2);
+    Wire.write(decToBcd(hour_int));
+    Wire.endTransmission();
+  }
+  else
+  {
+    // setting hour, minute, and second
+    // code taken from RTClib adjust()
+    Wire.beginTransmission(DS3231_I2C_ADDRESS);
+    // set to register 0 and write three bytes
+    Wire.write(0);
+    Wire.write(decToBcd(0));
+    Wire.write(decToBcd(minute_int));
+    /*
+     * The set time function will stay in a loop until the time set button is
+     * released.  So someone could set both hour and minutes while holding the
+     * button down.  While it may be rare, it's safer to set the hour every time
+     * the minute is changed.
+     */
+    Wire.write(decToBcd(hour_int));
+    Wire.endTransmission();
+  }
+
+  writing_time = 0;
+  setting_hour = 0;
+  setting_min = 0;
 }
 
 void setTime()
@@ -134,7 +252,7 @@ void setTime()
   while (time_set_state == HIGH)
   {
     // turn the separator on, it might have been off when button was hit
-    mx.setColumn(sep_pos, 0x14);
+    print_separator(1);
 
     /*
      * Read hour button
@@ -239,6 +357,186 @@ void setTime()
     writeNewTime();
 }
 
+void updateTime()
+{
+  if (writing_time)
+    return;
+
+  // get time
+  // code taken from RTClib now()
+  Wire.beginTransmission(DS3231_I2C_ADDRESS);
+  Wire.write(0);
+  Wire.endTransmission();
+  // read three bytes:  second, minute, hour
+  Wire.requestFrom(DS3231_I2C_ADDRESS, 3);
+  uint8_t new_second_int = bcdToDec(Wire.read() & 0x7F);
+  uint8_t new_minute_int = bcdToDec(Wire.read());
+  uint8_t new_hour_int = bcdToDec(Wire.read());
+
+  /*
+   * The logic that controls seconds displaying for 15 seconds.  This sets the
+   * initial value and resets everything after 15 seconds
+   */
+  if (display_seconds)
+  {
+    if (start_seconds == 0)
+    {
+      start_seconds = new_second_int;
+    }
+    else
+    {
+      if (new_second_int == (((start_seconds) + 15) % 60))
+      {
+        start_seconds = 0;
+        display_seconds = 0;
+        printTime();
+      }
+    }
+  }
+
+  // update the time
+  if (!setting_min)
+  {
+    if (!time_initialized ||
+        (second_int != new_second_int))
+    {
+      // blink on the separator
+      if (blink_sep_enable)
+          print_separator(1);
+      start_sep = millis();
+      second_int = new_second_int;
+      BLD_MIN_SEC_STR(second_char, second_str, second_int);
+    }
+    else if (blink_sep_enable && (!display_seconds) &&
+             ((millis() - start_sep) > 499))
+    {
+      // blink off separator
+      print_separator(0);
+    }
+
+    if (!time_initialized ||
+        (minute_int != new_minute_int))
+    {
+      minute_int = new_minute_int;
+      BLD_MIN_SEC_STR(minute_char, minute_str, minute_int);
+      PRINT_MIN(min_tens_pos, minute_char[0], min_ones_pos, minute_char[1]);
+    }
+  }
+  if (!setting_hour)
+  {
+    if (!time_initialized ||
+        (hour_int != new_hour_int))
+    {
+      hour_int = new_hour_int;
+      BLD_HOUR_STR(hour_char, hour_str, hour_int)
+      PRINT_HOUR(hour_tens_pos, hour_char[0],
+                 hour_ones_pos, hour_char[1], hour_int, period);
+      // check battery level every hour
+      check_battery_level();
+    }
+  }
+  checkAlarm();
+}
+
+/*******************************************************************************
+ * Alarm Functions                                                             *
+ ******************************************************************************/
+
+void handleAlarm()
+{
+  if (alarm_btn_state == HIGH)
+  {
+    // alarm was not turned on, turn it on
+    alarm_pwr_state = 1;
+    print_symbols();
+  }
+
+  if (alarm_btn_state == LOW)
+  {
+    // alarm was on, turn it off and stop any tone being generated
+    digitalWrite(BUZZER_PIN, LOW);
+    alarm_pwr_state = 0;
+    alarming = 0;
+    print_symbols();
+  }
+
+  /*
+   * We need to reset the alarm bit in either case.  If the alarm has been off,
+   * that just means we haven't paid attention to it.  The A1F bit could still
+   * be set from the last time it was triggered.  So every time the alarm is
+   * turned on, that bit should be reset.  Coincidentally, if a user turns the
+   * alarm on right at the moment it was about to go off, this would reset the
+   * alarm until 24 hours from now.  But a user shouldn't have a real use-case
+   * for this.
+   * In the case of turning the alarm off, that's a no brainer, we need to reset
+   * the bit.
+   */
+  resetAlarmStatus();
+}
+
+void handleSnooze()
+{
+  // Test for button release and store the up time
+  if ((millis() - snooze_btn_debounce_time) > long(debounce_delay))
+  {
+    if (snooze_btn_state == HIGH)
+    {
+      if (alarming)
+      {
+        digitalWrite(BUZZER_PIN, LOW);
+        alarming = 0;
+
+        /*
+         * this is the magic that resets us every 9 minutes, reset the A2F bit
+         * so it can come on again 9 minutes from now.  Also reset the alarm
+         * status.  They haven't turned the alarm off yet, but if we don't do
+         * this we'll keep triggering every check of the alarm status.  The only
+         * way for them to get out of this state is to turn off the alarm. So we
+         * know it's coming.  Basically, once you enter this state by hitting
+         * snooze, the only alarm you can use from that point on is snooze until
+         * you turn alarm off.
+         */
+        resetAlarmStatus();
+
+        /*
+         * Write 9 minutes from now into the alarm 2 register
+         * setting hour and minute each time by default
+         * code taken from RTClib adjust()
+         */
+        Wire.beginTransmission(DS3231_I2C_ADDRESS);
+        // set to register 0xb and write two bytes
+        Wire.write(0xb);
+        // grab minute_int once here in case it changes while doing calculations
+        int minute_plus = minute_int + 9;
+        int new_minute = minute_plus % 60;
+        int new_hour = hour_int + (minute_plus / 60);
+        Wire.write(decToBcd(new_minute));
+        Wire.write(decToBcd(new_hour));
+        Wire.endTransmission();
+      }
+      snooze_btn_debounce_time = millis();
+    }
+  }
+}
+
+void writeNewAlarm()
+{
+  // setting hour and minute each time by default
+  // code taken from RTClib adjust()
+  Wire.beginTransmission(DS3231_I2C_ADDRESS);
+  // set to register 8 and write two bytes
+  Wire.write(8);
+  Wire.write(decToBcd(alarm_minute_int));
+  Wire.write(decToBcd(alarm_hour_int));
+  Wire.endTransmission();
+
+  // reset alarm since we just wrote a new one, just in case
+  resetAlarmStatus();
+
+  setting_alarm_hour = 0;
+  setting_alarm_min = 0;
+}
+
 void setAlarm()
 {
   PRINT_HOUR(hour_tens_pos, alarm_hour_char[0],
@@ -250,7 +548,7 @@ void setAlarm()
   while (alarm_set_state == HIGH)
   {
     // turn the separator on, it might have been off when button was hit
-    mx.setColumn(sep_pos, 0x14);
+    print_separator(1);
 
     /*
      * Read hour button
@@ -359,102 +657,6 @@ void setAlarm()
     writeNewAlarm();
 }
 
-/*
- * I made the printing of minutes and hours a macro.  I am not doing so with
- * seconds.  For some reason when I printed this way the seconds never printed.
- * The minutes stayed up.  I didn't feel like debugging.  My main goal was using
- * the same handling to print minutes/hours for alarm and time anyway.  Seconds
- * are only called in one context.
- */
-void printSeconds()
-{
-  CLEAR_DISP();
-  // turn the separator on
-  mx.setColumn(sep_pos, 0x14);
-  mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
-  mx.setChar(min_tens_pos, second_char[0]);
-  mx.setChar(min_ones_pos, second_char[1]);
-  mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
-}
-
-void printTime()
-{
-  PRINT_MIN(min_tens_pos, minute_char[0],
-            min_ones_pos, minute_char[1]);
-  PRINT_HOUR(hour_tens_pos, hour_char[0],
-             hour_ones_pos, hour_char[1],
-             hour_int, period);
-}
-
-// Convert normal decimal numbers to binary coded decimal
-byte decToBcd(byte val)
-{
-  return( (val/10*16) + (val%10) );
-}
-
-// Convert binary coded decimal to normal decimal numbers
-byte bcdToDec(byte val)
-{
-  return( (val/16*10) + (val%16) );
-}
-
-void writeNewTime()
-{
-  writing_time = 1;
-
-  if (setting_hour && !setting_min)
-  {
-    // setting just hour
-    // code taken from RTClib adjust()
-    Wire.beginTransmission(DS3231_I2C_ADDRESS);
-    // set to register 2 and write one byte
-    Wire.write(2);
-    Wire.write(decToBcd(hour_int));
-    Wire.endTransmission();
-  }
-  else
-  {
-    // setting hour, minute, and second
-    // code taken from RTClib adjust()
-    Wire.beginTransmission(DS3231_I2C_ADDRESS);
-    // set to register 0 and write three bytes
-    Wire.write(0);
-    Wire.write(decToBcd(0));
-    Wire.write(decToBcd(minute_int));
-    /*
-     * The set time function will stay in a loop until the
-     * time set button is released.  So someone could set
-     * both hour and minutes while holding the button down.
-     * While it may be rare, it's safer to set the hour every
-     * time the minute is changed.
-     */
-    Wire.write(decToBcd(hour_int));
-    Wire.endTransmission();
-  }
-
-  writing_time = 0;
-  setting_hour = 0;
-  setting_min = 0;
-}
-
-void writeNewAlarm()
-{
-  // setting hour and minute each time by default
-  // code taken from RTClib adjust()
-  Wire.beginTransmission(DS3231_I2C_ADDRESS);
-  // set to register 8 and write two bytes
-  Wire.write(8);
-  Wire.write(decToBcd(alarm_minute_int));
-  Wire.write(decToBcd(alarm_hour_int));
-  Wire.endTransmission();
-
-  // reset alarm since we just wrote a new one, just in case
-  resetAlarmStatus();
-
-  setting_alarm_hour = 0;
-  setting_alarm_min = 0;
-}
-
 void initializeAlarm()
 {
   /*
@@ -493,8 +695,10 @@ void initializeAlarm()
 
 void getAlarmStatus()
 {
-  // get A1F and A2F status
-  // code taken from RTClib now()
+  /*
+   * get A1F and A2F status
+   * code taken from RTClib now()
+   */
   Wire.beginTransmission(DS3231_I2C_ADDRESS);
   Wire.write(0xf);
   Wire.endTransmission();
@@ -503,7 +707,9 @@ void getAlarmStatus()
   status_register = bcdToDec(Wire.read());
 }
 
-// Reset alarm AND snooze
+/*
+ * Reset alarm AND snooze
+ */
 void resetAlarmStatus()
 {
   getAlarmStatus();
@@ -542,81 +748,9 @@ void checkAlarm()
   }
 }
 
-void updateTime()
-{
-  if (writing_time)
-    return;
-
-  // get time
-  // code taken from RTClib now()
-  Wire.beginTransmission(DS3231_I2C_ADDRESS);
-  Wire.write(0);
-  Wire.endTransmission();
-  // read three bytes:  second, minute, hour
-  Wire.requestFrom(DS3231_I2C_ADDRESS, 3);
-  uint8_t new_second_int = bcdToDec(Wire.read() & 0x7F);
-  uint8_t new_minute_int = bcdToDec(Wire.read());
-  uint8_t new_hour_int = bcdToDec(Wire.read());
-
-  // the logic that controls seconds displaying for 15 seconds
-  // this sets the initial value and resets everything after
-  // 15 seconds
-  if (display_seconds)
-  {
-    if (start_seconds == 0)
-    {
-      start_seconds = new_second_int;
-    }
-    else
-    {
-      if (new_second_int == (((start_seconds) + 15) % 60))
-      {
-        start_seconds = 0;
-        display_seconds = 0;
-        printTime();
-      }
-    }
-  }
-
-  // update the time
-  if (!setting_min)
-  {
-    if (!time_initialized ||
-        (second_int != new_second_int))
-    {
-      // blink on the separator
-      mx.setColumn(sep_pos, 0x14);
-      start_sep = millis();
-      second_int = new_second_int;
-      BLD_MIN_SEC_STR(second_char, second_str, second_int);
-    }
-    else if (!display_seconds && ((millis() - start_sep) > 499))
-    {
-      // blink off separator
-      mx.setColumn(sep_pos, 0x00);
-    }
-
-    if (!time_initialized ||
-        (minute_int != new_minute_int))
-    {
-      minute_int = new_minute_int;
-      BLD_MIN_SEC_STR(minute_char, minute_str, minute_int);
-      PRINT_MIN(min_tens_pos, minute_char[0], min_ones_pos, minute_char[1]);
-    }
-  }
-  if (!setting_hour)
-  {
-    if (!time_initialized ||
-        (hour_int != new_hour_int))
-    {
-      hour_int = new_hour_int;
-      BLD_HOUR_STR(hour_char, hour_str, hour_int)
-      PRINT_HOUR(hour_tens_pos, hour_char[0],
-                 hour_ones_pos, hour_char[1], hour_int, period);
-    }
-  }
-  checkAlarm();
-}
+/*******************************************************************************
+ * Setup and main loop                                                         *
+ ******************************************************************************/
 
 void setup()
 {
@@ -632,13 +766,34 @@ void setup()
   pinMode(ALARM_PWR_PIN, INPUT);
   pinMode(SNOOZE_PIN, INPUT);
   pinMode(BRIGHTNESS_PIN, INPUT);
-  // this is an active buzzer
   pinMode(BUZZER_PIN, OUTPUT);
+  pinMode(VIN_LEVEL, INPUT);
+  pinMode(BATTERY_LEVEL, INPUT);
+
+  /*
+   * Set the power state
+   *
+   * Assume the clock starts up on battery.  If vin has signal, then set the
+   * variables for that.
+   */
+  last_vin_state = 0;
+  blink_sep_enable = 0;
+  brightness_index = 0;
+  if (analogRead(VIN_LEVEL))
+  {
+    last_vin_state = 1;
+    blink_sep_enable = 1;
+    brightness_index = default_brightness_index;
+  }
 
   // setup dot matrix
   mx.begin();
-  brightness_index = default_brightness_index;
   mx.control(MD_MAX72XX::INTENSITY, brightness_options[brightness_index]);
+  /*
+   * turn on the separator now, in case the clock comes up on battery it needs
+   * to be on
+   */
+  print_separator(1);
 
   // build the initial time and print it for a start
   updateTime();
@@ -651,6 +806,7 @@ void setup()
 
 void loop()
 {
+  check_power_state();
   updateTime();
 
   if (display_seconds)
@@ -662,7 +818,6 @@ void loop()
   if (seconds_disp_state == HIGH)
   {
     display_seconds = 1;
-    printSeconds();
   }
 
   time_set_state = digitalRead(TIME_SET_PIN);
@@ -703,10 +858,9 @@ void loop()
 
   brightness_btn_state = digitalRead(BRIGHTNESS_PIN);
   /*
-   * call adjust brightness if this reading is different than
-   * the last one, either the user pushed the button down or
-   * let it up.  Let the function deal with how to handle
-   * LOW and HIGH.
+   * call adjust brightness if this reading is different than the last one,
+   * either the user pushed the button down or let it up.  Let the function deal
+   * with how to handle LOW and HIGH.
    */
   if (brightness_btn_state != last_brightness_btn_state)
   {

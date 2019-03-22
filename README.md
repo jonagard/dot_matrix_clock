@@ -6,9 +6,8 @@ https://www.amazon.com/Wangdd22-MAX7219-Arduino-Microcontroller-Display/dp/B01EJ
 
 For now the plan is to be like a traditional bedside alarm clock.  It
 should support setting time, setting an alarm, displaying seconds, and
-changing brightness.  A stretch goal would be supporting a backup 9v
-battery power source to get a user through the night should the power go
-out.
+changing brightness.  It supports a backup battery source, 3 AA
+batteries, to get a user through the night should the power go out.
 
 Clock is based on the DS3231 RTC:
 
@@ -18,11 +17,22 @@ The clock stores the set time in the RTC and reads the time from it.  It
 uses an interrupt from the RTC to read every second, rather than
 continually polling to see if the time has changed.  Ideally this saves
 battery but probably not in reality, since most of the power usage are
-the LEDs.  If I get a backup battery working, maybe I can make the clock
-brightness automatically dim to the lowest setting.  It also writes the
-time to the dot matrix display and then does not rewrite that minute or
-hour until a change occurs.  Again, big dreams of efficiency that are
-probably wasted.
+the LEDs.  It also writes the time to the dot matrix display and then
+does not rewrite that minute or hour until a change occurs.  Big dreams
+of efficiency that are probably wasted.
+
+If power switches to the backup battery, the clock brightness
+automatically dims to the lowest setting and the separator stops
+blinking.  Also, a "b" symbol is printed on the left-most three columns.
+If the battery gets below 1.5V, an "L" will be printed.  When power is
+restored, the brightness goes back to the default brightness.
+
+The clock only checks the battery voltage every time the hour changes.
+It is my assumption it would use more battery to check it more
+regularly?  Thus, if you put a new battery in, it will take till the
+next hour change for the "L" to go away.  The "L" won't appear when
+there is no battery in the clock.  Again, if a battery is removed after
+"L" is printed, it will take till the next hour change to disappear.
 
 ### Limitations
 
@@ -43,10 +53,9 @@ alarm is used in the implementation of snooze.
 - [x] Blink separator
 - [x] Set an alarm
 - [x] Have alarm trigger a buzzer
-  - [ ] Volume control?
-- [x] Snoozer
+- [x] Snooze
 - [x] Support changing brightness
-- [ ] Backup power (RTC has time backup already, this is for the display
+- [x] Backup power (RTC has time backup already, this is for the display
   and alarm to still work)
 - [ ] ~~Show temperature?~~
   - I added this functionality and the temperature was impressively off.  Other

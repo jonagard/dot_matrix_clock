@@ -4,6 +4,7 @@
 /*
  * Pins
  */
+
 // dot matrix display
 #define CLK_PIN   13  // or SCK
 #define DATA_PIN  11  // or MOSI
@@ -19,6 +20,10 @@
 #define ALARM_PWR_PIN 9
 #define SNOOZE_PIN 12
 #define BRIGHTNESS_PIN A3
+
+// power level checks
+#define VIN_LEVEL A1
+#define BATTERY_LEVEL A2
 
 // Define the number of devices we have in the chain and the hardware interface
 #define  MAX_DEVICES 4
@@ -65,6 +70,10 @@ char alarm_hour_char[3];
 int period = 0;
 int alarm_period = 0;
 
+/*
+ * bitmaps
+ */
+
 // bitmap for "A" (AM) and "P" (PM) indicator
 uint8_t ampm[2][3] =
 {
@@ -87,6 +96,38 @@ uint8_t bell[3] =
 {
   0b00000101,
   0b00000011,
+  0b00000111
+};
+
+// bitmap for "on backup power" indicator, "b"
+uint8_t backup[3] =
+{
+  0b11100000,
+  0b11000000,
+  0b00000000
+};
+
+// bitmap for "low battery" indicator, "L"
+uint8_t low[3] =
+{
+  0b11100000,
+  0b10000000,
+  0b00000000
+};
+
+// bitmap for "on backup power" and "alarm on" indicator
+uint8_t bell_backup[3] =
+{
+  0b11100101,
+  0b11000011,
+  0b00000111
+};
+
+// bitmap for "low battery" and "alarm on" indicator
+uint8_t bell_low[3] =
+{
+  0b11100101,
+  0b10000011,
   0b00000111
 };
 
@@ -164,6 +205,13 @@ int writing_time= 0;
 int time_initialized = 0;
 int update_flag = 0;
 unsigned long start_sep = 0;
+int blink_sep_enable = 1;
+
+// power-check variables
+float battery_voltage;
+int low_battery = 0;
+int last_vin_state;
+#define BAT_THRESHOLD 1.5f
 
 /*
  * increment a value (a, which is an hour or minute) and wrap if it is greater
