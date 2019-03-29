@@ -34,41 +34,19 @@ RTC_DS3231 rtc;
 // Address of the RTC
 #define DS3231_I2C_ADDRESS 0x68
 
-/*
- * Using mx.setChar() for ease to print one char at a time.  This means it gets
- * a bit kludgey converting the integer time to a char array.  Will have to
- * convert each part to a string first and then convert the string to an array.
- * That means each part needs an integer, string, and character array
- * representation.
- *
- * I could use one function pretty easily to convert second and minute and get
- * rid of a couple of these. But then I'd have to pass variables around.  I like
- * how easy these are to call this way.
- */
 uint8_t second_int = 0;
-String second_str;
-char second_char[3];
-
 uint8_t minute_int = 0;
-String minute_str;
-char minute_char[3];
-
 uint8_t hour_int = 0;
-String hour_str;
-char hour_char[3];
 
 uint8_t alarm_minute_int = 0;
-String alarm_minute_str;
-char alarm_minute_char[3];
-
 uint8_t alarm_hour_int = 0;
-String alarm_hour_str;
-char alarm_hour_char[3];
 
 // for am, set period = 0
 // for pm, set period = 1
 int period = 0;
 int alarm_period = 0;
+
+#define NUM_WIDTH 5
 
 /*
  * bitmaps
@@ -147,7 +125,7 @@ uint8_t blank[5] =
  * digits here instead of trying to carry along a modified MX lib just to
  * change one digit.
  */
-uint8_t numbers[10][5] =
+uint8_t numbers[10][NUM_WIDTH] =
 {
   {
     62, 81, 73, 69, 62    // 48 - '0'
@@ -262,70 +240,18 @@ int last_vin_state;
 #define INCR(a, b) ((++a <= b) ? :a = 0)
 
 /*
- * build the string version of the minute or second and put it in the char array
- *
- * a - min or second char array
- * b - min or second string
- * c - min or second integer
- *
- * if it is 0-9, add the leading zero
- */
-#define BLD_MIN_SEC_STR(a, b, c) \
-  ((c < 10) ? (b = '0' + String(c)) : (b = String(c))); \
-  b.toCharArray(a, 3);
-
-/*
- * build the string version for the hour and put it in the char array
- *
- * a - hour char array
- * b - hour string
- * c - hour integer
- *
- * If the hour is 0, we want to print 12.  Do so by making the adjustment var
- * -12, so that (0 - (-12)) == 12.  Otherwise if time is greater than 12 adjust
- * the time by 12 since we aren't doing 24-hour time.
- *
- * Do some work here to deal with a single-length hour (1-9) rather than dealing
- * with it in the printing.  Single-length looks like:
- *
- * ['1']['\0']
- *
- * So shift things over and put a literal 0 in the zero position:
- *
- * [0]['1']['\0]
- *
- * That literal 0 won't print out five columns, so I still have to
- * call CLEAR_DISP().  Mostly just keeping something in it in case.
- */
-#define BLD_HOUR_STR(a, b, c) \
-  int adjustment = 0; \
-  if (c == 0) \
-    adjustment = -12; \
-  else if (c > 12) \
-    adjustment = 12; \
-  b = String(c - adjustment); \
-  b.toCharArray(a, 3); \
-  if (b.length() == 1) \
-  { \
-    a[2] = '\0'; \
-    a[1] = a[0]; \
-    a[0] = 0; \
-  }
-
-/*
  * print a minute value to the display
  *
  * a - tens position to print to
- * b - tens value
- * c - ones position to print to
- * d - ones value
+ * b - ones position to print to
+ * c - minute int value
  */
-#define PRINT_MIN(a, b, c, d) \
+#define PRINT_MIN(a, b, c) \
   if (!display_seconds) \
   { \
     mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF); \
-    mx.setChar(a, b); \
-    mx.setChar(c, d); \
+    mx.setBuffer(a, NUM_WIDTH, numbers[c/10]); \
+    mx.setBuffer(b, NUM_WIDTH, numbers[c%10]); \
     mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON); \
   }
 
@@ -333,28 +259,37 @@ int last_vin_state;
  * print an hour value to the display, and the period
  *
  * a - tens position to print to
- * b - tens value
- * c - ones position to print to
- * d - ones value
- * e - hour int value
- * f - period we work on
+ * b - ones position to print to
+ * c - hour int value
+ * d - period we work on
  *
- * Clear the display first as the second part of dealing with single-length
- * hours.
+ * Clear the display first for single-length hours, so there is nothing in the
+ * tens place.
+ *
+ * Convert the hour int, which is in 24-hour format, to 12-hour format before
+ * printing.
  *
  * Also print the period here, will work for an alarm or time.
  */
-#define PRINT_HOUR(a, b, c, d, e, f) \
+#define PRINT_HOUR(a, b, c, d) \
+  int adjustment = 0; \
+  int hour_in_12; \
+  if (c == 0) \
+    adjustment = -12; \
+  else if (c > 12) \
+    adjustment = 12; \
+  hour_in_12 = c - adjustment; \
   if (!display_seconds) \
   { \
     CLEAR_DISP(); \
-    f = 0; \
-    if (e > 11) \
-      f = 1; \
+    d = 0; \
+    if (c > 11) \
+      d = 1; \
     mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF); \
-    mx.setBuffer(period_pos, 3, ampm[f]); \
-    mx.setChar(a, b); \
-    mx.setChar(c, d); \
+    mx.setBuffer(period_pos, 3, ampm[d]); \
+    if (hour_in_12/10) \
+      mx.setBuffer(a, NUM_WIDTH, numbers[hour_in_12/10]); \
+    mx.setBuffer(b, NUM_WIDTH, numbers[hour_in_12%10]); \
     mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON); \
   }
 
@@ -367,7 +302,7 @@ int last_vin_state;
 #define CLEAR_DISP() \
   mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF); \
   mx.setBuffer(period_pos, 3, blank); \
-  mx.setBuffer(hour_tens_pos, 5, blank); \
-  mx.setBuffer(hour_ones_pos, 5, blank); \
+  mx.setBuffer(hour_tens_pos, NUM_WIDTH, blank); \
+  mx.setBuffer(hour_ones_pos, NUM_WIDTH, blank); \
   mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
 

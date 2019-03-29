@@ -124,7 +124,7 @@ int sampleLevel(int pin)
 /*
  * Check the vin from the power adapter.  If it is newly-found dead, decrease
  * brightness and stop blinking the separator to save battery.  If the power is
- * newlyfound alive, restore brightness to default and start blinking again.
+ * newly-found alive, restore brightness to default and start blinking again.
  */
 void checkPowerState()
 {
@@ -141,7 +141,7 @@ void checkPowerState()
     printSymbols();
   }
   else if ((vin_state) && (last_vin_state == 0))
-  {   
+  {
     // vin is alive and it was dead at the last check
     brightness_index = default_brightness_index;
     mx.control(MD_MAX72XX::INTENSITY, brightness_options[brightness_index]);
@@ -200,20 +200,15 @@ void printSeconds()
   // turn the separator on
   printSeparator(1);
   mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
-  //mx.setChar(min_tens_pos, second_char[0]);
-  //mx.setChar(min_ones_pos, second_char[1]);
-  mx.setBuffer(min_tens_pos, 5, numbers[second_int/10]);
-  mx.setBuffer(min_ones_pos, 5, numbers[second_int%10]);
+  mx.setBuffer(min_tens_pos, NUM_WIDTH, numbers[second_int/10]);
+  mx.setBuffer(min_ones_pos, NUM_WIDTH, numbers[second_int%10]);
   mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
 }
 
 void printTime()
 {
-  PRINT_MIN(min_tens_pos, minute_char[0],
-            min_ones_pos, minute_char[1]);
-  PRINT_HOUR(hour_tens_pos, hour_char[0],
-             hour_ones_pos, hour_char[1],
-             hour_int, period);
+  PRINT_MIN(min_tens_pos, min_ones_pos, minute_int);
+  PRINT_HOUR(hour_tens_pos, hour_ones_pos, hour_int, period);
 }
 
 void writeNewTime()
@@ -287,10 +282,7 @@ void setTime()
       {
         setting_hour = 1;
         INCR(hour_int, 23);
-        BLD_HOUR_STR(hour_char, hour_str, hour_int)
-        PRINT_HOUR(hour_tens_pos, hour_char[0],
-                   hour_ones_pos, hour_char[1],
-                   hour_int, period);
+        PRINT_HOUR(hour_tens_pos, hour_ones_pos, hour_int, period);
       }
       else
       {
@@ -305,10 +297,7 @@ void setTime()
     {
       setting_hour = 1;
       INCR(hour_int, 23);
-      BLD_HOUR_STR(hour_char, hour_str, hour_int)
-      PRINT_HOUR(hour_tens_pos, hour_char[0],
-                 hour_ones_pos, hour_char[1],
-                 hour_int, period);
+      PRINT_HOUR(hour_tens_pos, hour_ones_pos, hour_int, period);
       ignore_hour_up = true;
       hour_down_time = millis();
     }
@@ -333,8 +322,7 @@ void setTime()
       {
         setting_min = 1;
         INCR(minute_int, 59);
-        BLD_MIN_SEC_STR(minute_char, minute_str, minute_int);
-        PRINT_MIN(min_tens_pos, minute_char[0], min_ones_pos, minute_char[1]);
+        PRINT_MIN(min_tens_pos, min_ones_pos, minute_int);
       }
       else
       {
@@ -349,8 +337,7 @@ void setTime()
     {
       setting_min = 1;
       INCR(minute_int, 59);
-      BLD_MIN_SEC_STR(minute_char, minute_str, minute_int);
-      PRINT_MIN(min_tens_pos, minute_char[0], min_ones_pos, minute_char[1]);
+      PRINT_MIN(min_tens_pos, min_ones_pos, minute_int);
       ignore_min_up = true;
       min_down_time = millis();
     }
@@ -412,7 +399,6 @@ void updateTime()
           printSeparator(1);
       start_sep = millis();
       second_int = new_second_int;
-      BLD_MIN_SEC_STR(second_char, second_str, second_int);
       // check power state every second
       checkPowerState();
     }
@@ -427,8 +413,7 @@ void updateTime()
         (minute_int != new_minute_int))
     {
       minute_int = new_minute_int;
-      BLD_MIN_SEC_STR(minute_char, minute_str, minute_int);
-      PRINT_MIN(min_tens_pos, minute_char[0], min_ones_pos, minute_char[1]);
+      PRINT_MIN(min_tens_pos, min_ones_pos, minute_int);
     }
   }
   if (!setting_hour)
@@ -437,9 +422,7 @@ void updateTime()
         (hour_int != new_hour_int))
     {
       hour_int = new_hour_int;
-      BLD_HOUR_STR(hour_char, hour_str, hour_int)
-      PRINT_HOUR(hour_tens_pos, hour_char[0],
-                 hour_ones_pos, hour_char[1], hour_int, period);
+      PRINT_HOUR(hour_tens_pos, hour_ones_pos, hour_int, period);
       // check battery level every hour
       checkBatteryLevel();
     }
@@ -518,6 +501,7 @@ void handleSnooze()
         // grab minute_int once here in case it changes while doing calculations
         int minute_plus = minute_int + 9;
         int new_minute = minute_plus % 60;
+        // FIXME:  Case of 11pm going to midnight
         int new_hour = hour_int + (minute_plus / 60);
         Wire.write(decToBcd(new_minute));
         Wire.write(decToBcd(new_hour));
@@ -548,11 +532,8 @@ void writeNewAlarm()
 
 void setAlarm()
 {
-  PRINT_HOUR(hour_tens_pos, alarm_hour_char[0],
-             hour_ones_pos, alarm_hour_char[1],
-             alarm_hour_int, alarm_period);
-  PRINT_MIN(min_tens_pos, alarm_minute_char[0],
-            min_ones_pos, alarm_minute_char[1]);
+  PRINT_HOUR(hour_tens_pos, hour_ones_pos, alarm_hour_int, alarm_period);
+  PRINT_MIN(min_tens_pos, min_ones_pos, alarm_minute_int);
 
   while (alarm_set_state == HIGH)
   {
@@ -585,10 +566,7 @@ void setAlarm()
       {
         setting_alarm_hour = 1;
         INCR(alarm_hour_int, 23);
-        BLD_HOUR_STR(alarm_hour_char, alarm_hour_str, alarm_hour_int)
-        PRINT_HOUR(hour_tens_pos, alarm_hour_char[0],
-                   hour_ones_pos, alarm_hour_char[1],
-                   alarm_hour_int, alarm_period);
+        PRINT_HOUR(hour_tens_pos, hour_ones_pos, alarm_hour_int, alarm_period);
       }
       else
       {
@@ -603,10 +581,7 @@ void setAlarm()
     {
       setting_alarm_hour = 1;
       INCR(alarm_hour_int, 23);
-      BLD_HOUR_STR(alarm_hour_char, alarm_hour_str, alarm_hour_int)
-      PRINT_HOUR(hour_tens_pos, alarm_hour_char[0],
-                 hour_ones_pos, alarm_hour_char[1],
-                 alarm_hour_int, alarm_period);
+      PRINT_HOUR(hour_tens_pos, hour_ones_pos, alarm_hour_int, alarm_period);
       ignore_hour_up = true;
       hour_down_time = millis();
     }
@@ -631,9 +606,7 @@ void setAlarm()
       {
         setting_alarm_min = 1;
         INCR(alarm_minute_int, 59);
-        BLD_MIN_SEC_STR(alarm_minute_char, alarm_minute_str, alarm_minute_int);
-        PRINT_MIN(min_tens_pos, alarm_minute_char[0],
-                  min_ones_pos, alarm_minute_char[1]);
+        PRINT_MIN(min_tens_pos, min_ones_pos, alarm_minute_int);
       }
       else
       {
@@ -648,9 +621,7 @@ void setAlarm()
     {
       setting_alarm_min = 1;
       INCR(alarm_minute_int, 59);
-      BLD_MIN_SEC_STR(alarm_minute_char, alarm_minute_str, alarm_minute_int);
-      PRINT_MIN(min_tens_pos, alarm_minute_char[0],
-                min_ones_pos, alarm_minute_char[1]);
+      PRINT_MIN(min_tens_pos, min_ones_pos, alarm_minute_int);
       ignore_min_up = true;
       min_down_time = millis();
     }
@@ -681,8 +652,6 @@ void initializeAlarm()
   Wire.requestFrom(DS3231_I2C_ADDRESS, 2);
   alarm_minute_int = bcdToDec(Wire.read());
   alarm_hour_int = bcdToDec(Wire.read());
-  BLD_HOUR_STR(alarm_hour_char, alarm_hour_str, alarm_hour_int)
-  BLD_MIN_SEC_STR(alarm_minute_char, alarm_minute_str, alarm_minute_int);
 
   /*
    * Set the A1M4 bit to 1 so that the alarm matches on hour/minute/second
