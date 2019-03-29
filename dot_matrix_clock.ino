@@ -69,7 +69,7 @@ byte bcdToDec(byte val)
 /*
  * Print the ":" separator, or turn it off
  */
-void print_separator(int value)
+void printSeparator(int value)
 {
   if (value)
     mx.setColumn(sep_pos, 0x14);
@@ -81,7 +81,7 @@ void print_separator(int value)
  * Print the symbols on the left-most columns, some combination of alarm bell,
  * backup status, or low battery
  */
-void print_symbols()
+void printSymbols()
 {
   uint8_t * bitmap = blank;
 
@@ -107,33 +107,47 @@ void print_symbols()
   mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
 }
 
+int sampleLevel(int pin)
+{
+  int num_samples = 10;
+  int sum = 0;
+  unsigned char sample_count = 0;
+
+  while (sample_count < num_samples) {
+    sum += analogRead(pin);
+    sample_count++;
+    delay(10);
+  }
+  return(((float)sum / (float)num_samples * 5.015) / 1024.0);
+}
+
 /*
  * Check the vin from the power adapter.  If it is newly-found dead, decrease
  * brightness and stop blinking the separator to save battery.  If the power is
  * newlyfound alive, restore brightness to default and start blinking again.
  */
-void check_power_state()
+void checkPowerState()
 {
-  int vin_state = analogRead(VIN_LEVEL);
+  int vin_state = sampleLevel(VIN_LEVEL);
 
   if ((!vin_state) && (last_vin_state == 1))
   {
     // vin is dead and it was alive at the last check
     brightness_index = 0;
     mx.control(MD_MAX72XX::INTENSITY, brightness_options[brightness_index]);
-    print_separator(1);
+    printSeparator(1);
     blink_sep_enable = 0;
     last_vin_state = 0;
-    print_symbols();
+    printSymbols();
   }
   else if ((vin_state) && (last_vin_state == 0))
-  {
+  {   
     // vin is alive and it was dead at the last check
     brightness_index = default_brightness_index;
     mx.control(MD_MAX72XX::INTENSITY, brightness_options[brightness_index]);
     blink_sep_enable = 1;
     last_vin_state = 1;
-    print_symbols();
+    printSymbols();
   }
 }
 
@@ -148,18 +162,9 @@ void check_power_state()
  * the status to change.  Trade-off is I hopefully use less battery by not
  * checking it frequently.
  */
-void check_battery_level()
+void checkBatteryLevel()
 {
-  int num_samples = 10;
-  int sum = 0;
-  unsigned char sample_count = 0;
-
-  while (sample_count < num_samples) {
-    sum += analogRead(BATTERY_LEVEL);
-    sample_count++;
-    delay(10);
-  }
-  battery_voltage = ((float)sum / (float)num_samples * 5.015) / 1024.0;
+  battery_voltage = sampleLevel(BATTERY_LEVEL);
 
   // Don't warn if there are no batteries (voltage == 0)
   if ((!low_battery) &&
@@ -167,14 +172,14 @@ void check_battery_level()
   {
     // battery is low and it was not low on the last check
     low_battery = 1;
-    print_symbols();
+    printSymbols();
   }
   else if ((low_battery) &&
            ((battery_voltage > BAT_THRESHOLD) || (battery_voltage == 0)))
   {
     // battery is ok and it was low on the last check, or no battery
     low_battery = 0;
-    print_symbols();
+    printSymbols();
   }
 }
 
@@ -193,10 +198,12 @@ void printSeconds()
 {
   CLEAR_DISP();
   // turn the separator on
-  print_separator(1);
+  printSeparator(1);
   mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
-  mx.setChar(min_tens_pos, second_char[0]);
-  mx.setChar(min_ones_pos, second_char[1]);
+  //mx.setChar(min_tens_pos, second_char[0]);
+  //mx.setChar(min_ones_pos, second_char[1]);
+  mx.setBuffer(min_tens_pos, 5, numbers[second_int/10]);
+  mx.setBuffer(min_ones_pos, 5, numbers[second_int%10]);
   mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
 }
 
@@ -252,7 +259,7 @@ void setTime()
   while (time_set_state == HIGH)
   {
     // turn the separator on, it might have been off when button was hit
-    print_separator(1);
+    printSeparator(1);
 
     /*
      * Read hour button
@@ -402,16 +409,18 @@ void updateTime()
     {
       // blink on the separator
       if (blink_sep_enable)
-          print_separator(1);
+          printSeparator(1);
       start_sep = millis();
       second_int = new_second_int;
       BLD_MIN_SEC_STR(second_char, second_str, second_int);
+      // check power state every second
+      checkPowerState();
     }
     else if (blink_sep_enable && (!display_seconds) &&
              ((millis() - start_sep) > 499))
     {
       // blink off separator
-      print_separator(0);
+      printSeparator(0);
     }
 
     if (!time_initialized ||
@@ -432,7 +441,7 @@ void updateTime()
       PRINT_HOUR(hour_tens_pos, hour_char[0],
                  hour_ones_pos, hour_char[1], hour_int, period);
       // check battery level every hour
-      check_battery_level();
+      checkBatteryLevel();
     }
   }
   checkAlarm();
@@ -448,7 +457,7 @@ void handleAlarm()
   {
     // alarm was not turned on, turn it on
     alarm_pwr_state = 1;
-    print_symbols();
+    printSymbols();
   }
 
   if (alarm_btn_state == LOW)
@@ -457,7 +466,7 @@ void handleAlarm()
     digitalWrite(BUZZER_PIN, LOW);
     alarm_pwr_state = 0;
     alarming = 0;
-    print_symbols();
+    printSymbols();
   }
 
   /*
@@ -548,7 +557,7 @@ void setAlarm()
   while (alarm_set_state == HIGH)
   {
     // turn the separator on, it might have been off when button was hit
-    print_separator(1);
+    printSeparator(1);
 
     /*
      * Read hour button
@@ -779,7 +788,7 @@ void setup()
   last_vin_state = 0;
   blink_sep_enable = 0;
   brightness_index = 0;
-  if (analogRead(VIN_LEVEL))
+  if (sampleLevel(VIN_LEVEL))
   {
     last_vin_state = 1;
     blink_sep_enable = 1;
@@ -793,7 +802,8 @@ void setup()
    * turn on the separator now, in case the clock comes up on battery it needs
    * to be on
    */
-  print_separator(1);
+  printSymbols();
+  printSeparator(1);
 
   // build the initial time and print it for a start
   updateTime();
@@ -806,7 +816,6 @@ void setup()
 
 void loop()
 {
-  check_power_state();
   updateTime();
 
   if (display_seconds)

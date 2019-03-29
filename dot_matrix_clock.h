@@ -19,7 +19,7 @@
 #define BUZZER_PIN 8
 #define ALARM_PWR_PIN 9
 #define SNOOZE_PIN 12
-#define BRIGHTNESS_PIN A3
+#define BRIGHTNESS_PIN A0
 
 // power level checks
 #define VIN_LEVEL A1
@@ -141,6 +141,46 @@ uint8_t blank[5] =
   0b00000000
 };
 
+/*
+ * Stole the numbers 0-9 from the MX library, but modified '1' to be five
+ * columns wide instead of 3.  Because of that, it's easier to keep all 10
+ * digits here instead of trying to carry along a modified MX lib just to
+ * change one digit.
+ */
+uint8_t numbers[10][5] =
+{
+  {
+    62, 81, 73, 69, 62    // 48 - '0'
+  },
+  {
+    64, 66, 127, 64, 64   // 49 - '1'
+  },
+  {
+    114, 73, 73, 73, 70   // 50 - '2'
+  },
+  {
+    33, 65, 73, 77, 51    // 51 - '3'
+  },
+  {
+    24, 20, 18, 127, 16   // 52 - '4'
+  },
+  {
+    39, 69, 69, 69, 57    // 53 - '5'
+  },
+  {
+    60, 74, 73, 73, 49    // 54 - '6'
+  },
+  {
+    65, 33, 17, 9, 7      // 55 - '7'
+  },
+  {
+    54, 73, 73, 73, 54    // 56 - '8'
+  },
+  {
+    70, 73, 73, 41, 30    // 57 - '9'
+  }
+};
+
 // positions for each number in the clock output
 int hour_tens_pos = 28;
 int hour_ones_pos = 22;
@@ -211,7 +251,7 @@ int blink_sep_enable = 1;
 float battery_voltage;
 int low_battery = 0;
 int last_vin_state;
-#define BAT_THRESHOLD 1.5f
+#define BAT_THRESHOLD 2.5f
 
 /*
  * increment a value (a, which is an hour or minute) and wrap if it is greater
