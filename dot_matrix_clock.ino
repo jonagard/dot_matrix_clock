@@ -107,30 +107,50 @@ void printSymbols()
   mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
 }
 
-int sampleLevel(int pin)
+int readBatteryLevel()
 {
-  int num_samples = 10;
-  int sum = 0;
-  unsigned char sample_count = 0;
+  return(analogRead(BATTERY_LEVEL));
+}
 
-  while (sample_count < num_samples) {
-    sum += analogRead(pin);
-    sample_count++;
-    delay(10);
+int readVinLevel()
+{
+  return(analogRead(VIN_LEVEL));
+}
+
+float sumBatteryLevel()
+{
+  int sum = 0;
+  int i;
+
+  for (i=0; i < num_samples; i++)
+  {
+    sum += battery_samples[i];
+  }
+  return(((float)sum / (float)num_samples * 5.015) / 1024.0);
+}
+
+float sumVinLevel()
+{
+  int sum = 0;
+  int i;
+
+  for (i=0; i < num_samples; i++)
+  {
+    sum += vin_samples[i];
   }
   return(((float)sum / (float)num_samples * 5.015) / 1024.0);
 }
 
 /*
- * Check the vin from the power adapter.  If it is newly-found dead, decrease
- * brightness and stop blinking the separator to save battery.  If the power is
- * newly-found alive, restore brightness to default and start blinking again.
+ * Check the vin level.  If it is newly-found dead, decrease brightness and stop
+ * blinking the separator to save battery.  If the power is newly-found alive,
+ * restore brightness to default and start blinking again.
  */
 void checkPowerState()
 {
-  int vin_state = sampleLevel(VIN_LEVEL);
+  float vin_state = sumVinLevel();
 
-  if ((!vin_state) && (last_vin_state == 1))
+  if ((vin_state < VIN_THRESHOLD) && (last_vin_state == 1))
   {
     // vin is dead and it was alive at the last check
     brightness_index = 0;
@@ -140,7 +160,7 @@ void checkPowerState()
     last_vin_state = 0;
     printSymbols();
   }
-  else if ((vin_state) && (last_vin_state == 0))
+  else if ((vin_state > VIN_THRESHOLD) && (last_vin_state == 0))
   {
     // vin is alive and it was dead at the last check
     brightness_index = default_brightness_index;
@@ -155,16 +175,10 @@ void checkPowerState()
  * Check the battery level.  If low, print the "L" symbol.
  *
  * HT:  https://startingelectronics.org/articles/arduino/measuring-voltage-with-arduino/
- *
- * I'm not worrying about checking this at clock startup.  Just check it every
- * time the hour changes.  Downside to only checking at the hour change: if you
- * put in new batteries, or take batteries out, it could take up to an hour for
- * the status to change.  Trade-off is I hopefully use less battery by not
- * checking it frequently.
  */
 void checkBatteryLevel()
 {
-  battery_voltage = sampleLevel(BATTERY_LEVEL);
+  float battery_voltage = sumBatteryLevel();
 
   // Don't warn if there are no batteries (voltage == 0)
   if ((!low_battery) &&
@@ -399,8 +413,9 @@ void updateTime()
           printSeparator(1);
       start_sep = millis();
       second_int = new_second_int;
-      // check power state every second
+      // check battery level and power state every second
       checkPowerState();
+      checkBatteryLevel();
     }
     else if (blink_sep_enable && (!display_seconds) &&
              ((millis() - start_sep) > 499))
@@ -423,8 +438,6 @@ void updateTime()
     {
       hour_int = new_hour_int;
       PRINT_HOUR(hour_tens_pos, hour_ones_pos, hour_int, period);
-      // check battery level every hour
-      checkBatteryLevel();
     }
   }
   checkAlarm();
@@ -497,12 +510,13 @@ void handleSnooze()
          */
         Wire.beginTransmission(DS3231_I2C_ADDRESS);
         // set to register 0xb and write two bytes
+        // no need to handle seconds, alarm 2 does not support them
         Wire.write(0xb);
         // grab minute_int once here in case it changes while doing calculations
         int minute_plus = minute_int + 9;
         int new_minute = minute_plus % 60;
-        // FIXME:  Case of 11pm going to midnight
-        int new_hour = hour_int + (minute_plus / 60);
+        int hour_plus = hour_int + (minute_plus / 60);
+        int new_hour = (hour_int == 23) ? 0 : hour_plus;
         Wire.write(decToBcd(new_minute));
         Wire.write(decToBcd(new_hour));
         Wire.endTransmission();
@@ -517,8 +531,10 @@ void writeNewAlarm()
   // setting hour and minute each time by default
   // code taken from RTClib adjust()
   Wire.beginTransmission(DS3231_I2C_ADDRESS);
-  // set to register 8 and write two bytes
-  Wire.write(8);
+  // set to register 7 and write three bytes
+  // ensures the alarm starts at 0 seconds
+  Wire.write(7);
+  Wire.write(decToBcd(0));
   Wire.write(decToBcd(alarm_minute_int));
   Wire.write(decToBcd(alarm_hour_int));
   Wire.endTransmission();
@@ -732,10 +748,13 @@ void checkAlarm()
 
 void setup()
 {
+  int i;
+
   Serial.begin(9600);
 
   Wire.begin();
 
+  pinMode(BRIGHTNESS_PIN, INPUT);
   pinMode(SECONDS_PIN, INPUT);
   pinMode(TIME_SET_PIN, INPUT);
   pinMode(ALARM_SET_PIN, INPUT);
@@ -743,7 +762,6 @@ void setup()
   pinMode(MIN_SET_PIN, INPUT);
   pinMode(ALARM_PWR_PIN, INPUT);
   pinMode(SNOOZE_PIN, INPUT);
-  pinMode(BRIGHTNESS_PIN, INPUT);
   pinMode(BUZZER_PIN, OUTPUT);
   pinMode(VIN_LEVEL, INPUT);
   pinMode(BATTERY_LEVEL, INPUT);
@@ -753,11 +771,20 @@ void setup()
    *
    * Assume the clock starts up on battery.  If vin has signal, then set the
    * variables for that.
+   *
+   * First initialize sample history with 10 readings
    */
+  for (i=0; i < num_samples; i++)
+  {
+    battery_samples[i] = readBatteryLevel();
+    vin_samples[i] = readVinLevel();
+  }
+  oldest_battery_sample_idx = oldest_vin_sample_idx = 0;
+
   last_vin_state = 0;
   blink_sep_enable = 0;
   brightness_index = 0;
-  if (sampleLevel(VIN_LEVEL))
+  if (sumVinLevel())
   {
     last_vin_state = 1;
     blink_sep_enable = 1;
@@ -785,6 +812,12 @@ void setup()
 
 void loop()
 {
+  // Do level checks at the top of each loop.  Overwrite oldest value.
+  battery_samples[oldest_battery_sample_idx] = readBatteryLevel();
+  oldest_battery_sample_idx = (oldest_battery_sample_idx + 1) % num_samples;
+  vin_samples[oldest_vin_sample_idx] = readVinLevel();
+  oldest_vin_sample_idx = (oldest_vin_sample_idx + 1) % num_samples;
+
   updateTime();
 
   if (display_seconds)

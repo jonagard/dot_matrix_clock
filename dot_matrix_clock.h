@@ -11,6 +11,7 @@
 #define CS_PIN    10  // or SS
 
 // buttons
+#define BRIGHTNESS_PIN 2
 #define TIME_SET_PIN 3
 #define ALARM_SET_PIN 4
 #define HOUR_SET_PIN 5
@@ -19,16 +20,21 @@
 #define BUZZER_PIN 8
 #define ALARM_PWR_PIN 9
 #define SNOOZE_PIN 12
-#define BRIGHTNESS_PIN A0
 
 // power level checks
-#define VIN_LEVEL A1
-#define BATTERY_LEVEL A2
+#define VIN_LEVEL A0
+#define BATTERY_LEVEL A1
+
+// RTC pins
+// defined as addresses in rtclib.h
+// SDA = A4
+// SCL = A5
+
 
 // Define the number of devices we have in the chain and the hardware interface
 #define  MAX_DEVICES 4
 // SPI hardware interface
-MD_MAX72XX mx = MD_MAX72XX(CS_PIN, MAX_DEVICES);
+MD_MAX72XX mx = MD_MAX72XX(MD_MAX72XX::FC16_HW, CS_PIN, MAX_DEVICES);
 
 RTC_DS3231 rtc;
 // Address of the RTC
@@ -226,10 +232,20 @@ unsigned long start_sep = 0;
 int blink_sep_enable = 1;
 
 // power-check variables
-float battery_voltage;
+const int num_samples = 10;
+int battery_samples[num_samples];
+int vin_samples[num_samples];
+uint8_t oldest_battery_sample_idx;
+uint8_t oldest_vin_sample_idx;
 int low_battery = 0;
 int last_vin_state;
 #define BAT_THRESHOLD 2.5f
+/*
+ * analog input is kind of dirty.  vin check rarely sums to actual zero.  vin
+ * should always be around 5V, so choose some low value that basically means
+ * "zero volts, vin is dead".
+ */
+#define VIN_THRESHOLD 1.0f
 
 /*
  * increment a value (a, which is an hour or minute) and wrap if it is greater
