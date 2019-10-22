@@ -21,15 +21,12 @@
 #define ALARM_PWR_PIN 9
 #define SNOOZE_PIN 12
 
-// power level checks
-#define VIN_LEVEL A0
-#define BATTERY_LEVEL A1
-
-// RTC pins
-// defined as addresses in rtclib.h
-// SDA = A4
-// SCL = A5
-
+/*
+ * RTC pins
+ * defined as addresses in rtclib.h
+ * SDA = A4
+ * SCL = A5
+ */
 
 // Define the number of devices we have in the chain and the hardware interface
 #define  MAX_DEVICES 4
@@ -80,38 +77,6 @@ uint8_t bell[3] =
 {
   0b00000101,
   0b00000011,
-  0b00000111
-};
-
-// bitmap for "on backup power" indicator, "b"
-uint8_t backup[3] =
-{
-  0b11100000,
-  0b11000000,
-  0b00000000
-};
-
-// bitmap for "low battery" indicator, "L"
-uint8_t low[3] =
-{
-  0b11100000,
-  0b10000000,
-  0b00000000
-};
-
-// bitmap for "on backup power" and "alarm on" indicator
-uint8_t bell_backup[3] =
-{
-  0b11100101,
-  0b11000011,
-  0b00000111
-};
-
-// bitmap for "low battery" and "alarm on" indicator
-uint8_t bell_low[3] =
-{
-  0b11100101,
-  0b10000011,
   0b00000111
 };
 
@@ -231,22 +196,6 @@ int update_flag = 0;
 unsigned long start_sep = 0;
 int blink_sep_enable = 1;
 
-// power-check variables
-const int num_samples = 10;
-int battery_samples[num_samples];
-int vin_samples[num_samples];
-uint8_t oldest_battery_sample_idx;
-uint8_t oldest_vin_sample_idx;
-int low_battery = 0;
-int last_vin_state;
-#define BAT_THRESHOLD 2.5f
-/*
- * analog input is kind of dirty.  vin check rarely sums to actual zero.  vin
- * should always be around 5V, so choose some low value that basically means
- * "zero volts, vin is dead".
- */
-#define VIN_THRESHOLD 1.0f
-
 /*
  * increment a value (a, which is an hour or minute) and wrap if it is greater
  * than the limit (b, which is 23 or 59) since there isn't something to do in
@@ -321,4 +270,3 @@ int last_vin_state;
   mx.setBuffer(hour_tens_pos, NUM_WIDTH, blank); \
   mx.setBuffer(hour_ones_pos, NUM_WIDTH, blank); \
   mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
-

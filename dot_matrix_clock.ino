@@ -85,116 +85,14 @@ void printSymbols()
 {
   uint8_t * bitmap = blank;
 
-  // prioritize the low battery over backup
   if (alarm_pwr_state)
-  {
-    if (low_battery)
-      bitmap = bell_low;
-    else if (!last_vin_state)
-      bitmap = bell_backup;
-    else
       bitmap = bell;
-  }
-  else if (low_battery)
-    bitmap = low;
-  else if (!last_vin_state)
-    bitmap = backup;
   else
     bitmap = blank;
 
   mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::OFF);
   mx.setBuffer(31, 3, bitmap);
   mx.control(0, MAX_DEVICES-1, MD_MAX72XX::UPDATE, MD_MAX72XX::ON);
-}
-
-int readBatteryLevel()
-{
-  return(analogRead(BATTERY_LEVEL));
-}
-
-int readVinLevel()
-{
-  return(analogRead(VIN_LEVEL));
-}
-
-float sumBatteryLevel()
-{
-  int sum = 0;
-  int i;
-
-  for (i=0; i < num_samples; i++)
-  {
-    sum += battery_samples[i];
-  }
-  return(((float)sum / (float)num_samples * 5.015) / 1024.0);
-}
-
-float sumVinLevel()
-{
-  int sum = 0;
-  int i;
-
-  for (i=0; i < num_samples; i++)
-  {
-    sum += vin_samples[i];
-  }
-  return(((float)sum / (float)num_samples * 5.015) / 1024.0);
-}
-
-/*
- * Check the vin level.  If it is newly-found dead, decrease brightness and stop
- * blinking the separator to save battery.  If the power is newly-found alive,
- * restore brightness to default and start blinking again.
- */
-void checkPowerState()
-{
-  float vin_state = sumVinLevel();
-
-  if ((vin_state < VIN_THRESHOLD) && (last_vin_state == 1))
-  {
-    // vin is dead and it was alive at the last check
-    brightness_index = 0;
-    mx.control(MD_MAX72XX::INTENSITY, brightness_options[brightness_index]);
-    printSeparator(1);
-    blink_sep_enable = 0;
-    last_vin_state = 0;
-    printSymbols();
-  }
-  else if ((vin_state > VIN_THRESHOLD) && (last_vin_state == 0))
-  {
-    // vin is alive and it was dead at the last check
-    brightness_index = default_brightness_index;
-    mx.control(MD_MAX72XX::INTENSITY, brightness_options[brightness_index]);
-    blink_sep_enable = 1;
-    last_vin_state = 1;
-    printSymbols();
-  }
-}
-
-/*
- * Check the battery level.  If low, print the "L" symbol.
- *
- * HT:  https://startingelectronics.org/articles/arduino/measuring-voltage-with-arduino/
- */
-void checkBatteryLevel()
-{
-  float battery_voltage = sumBatteryLevel();
-
-  // Don't warn if there are no batteries (voltage == 0)
-  if ((!low_battery) &&
-      ((battery_voltage < BAT_THRESHOLD) && (battery_voltage > 0)))
-  {
-    // battery is low and it was not low on the last check
-    low_battery = 1;
-    printSymbols();
-  }
-  else if ((low_battery) &&
-           ((battery_voltage > BAT_THRESHOLD) || (battery_voltage == 0)))
-  {
-    // battery is ok and it was low on the last check, or no battery
-    low_battery = 0;
-    printSymbols();
-  }
 }
 
 /*******************************************************************************
@@ -413,9 +311,6 @@ void updateTime()
           printSeparator(1);
       start_sep = millis();
       second_int = new_second_int;
-      // check battery level and power state every second
-      checkPowerState();
-      checkBatteryLevel();
     }
     else if (blink_sep_enable && (!display_seconds) &&
              ((millis() - start_sep) > 499))
@@ -763,41 +658,13 @@ void setup()
   pinMode(ALARM_PWR_PIN, INPUT);
   pinMode(SNOOZE_PIN, INPUT);
   pinMode(BUZZER_PIN, OUTPUT);
-  pinMode(VIN_LEVEL, INPUT);
-  pinMode(BATTERY_LEVEL, INPUT);
 
-  /*
-   * Set the power state
-   *
-   * Assume the clock starts up on battery.  If vin has signal, then set the
-   * variables for that.
-   *
-   * First initialize sample history with 10 readings
-   */
-  for (i=0; i < num_samples; i++)
-  {
-    battery_samples[i] = readBatteryLevel();
-    vin_samples[i] = readVinLevel();
-  }
-  oldest_battery_sample_idx = oldest_vin_sample_idx = 0;
-
-  last_vin_state = 0;
-  blink_sep_enable = 0;
-  brightness_index = 0;
-  if (sumVinLevel())
-  {
-    last_vin_state = 1;
-    blink_sep_enable = 1;
-    brightness_index = default_brightness_index;
-  }
+  blink_sep_enable = 1;
+  brightness_index = default_brightness_index;
 
   // setup dot matrix
   mx.begin();
   mx.control(MD_MAX72XX::INTENSITY, brightness_options[brightness_index]);
-  /*
-   * turn on the separator now, in case the clock comes up on battery it needs
-   * to be on
-   */
   printSymbols();
   printSeparator(1);
 
@@ -812,12 +679,6 @@ void setup()
 
 void loop()
 {
-  // Do level checks at the top of each loop.  Overwrite oldest value.
-  battery_samples[oldest_battery_sample_idx] = readBatteryLevel();
-  oldest_battery_sample_idx = (oldest_battery_sample_idx + 1) % num_samples;
-  vin_samples[oldest_vin_sample_idx] = readVinLevel();
-  oldest_vin_sample_idx = (oldest_vin_sample_idx + 1) % num_samples;
-
   updateTime();
 
   if (display_seconds)
@@ -881,4 +742,3 @@ void loop()
   }
   last_brightness_btn_state = brightness_btn_state;
 }
-
